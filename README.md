@@ -3,8 +3,9 @@
 
 ## A dynamic environment variable evaluator with a custom language and vm.
 
-- [x]. Vite support
-- [ ]. React support
+### Support
+- [x] Vite support
+- [ ] React support
 
 
 ### Example code:
