@@ -3,6 +3,17 @@ const { ByteComiler } = require('./bytecompiler.js');
 const { runBytecode, envx } = require('./runtime.js');
 
 const EXT = 'envx';
+const PLUGIN_VITE = 'envxPluginVite';
+
+const TEMPLATE  = 
+`
+const { runBytecode, envx, <pluginName> } = require('./src/app.js');
+runBytecode([<code>]);
+module.exports = {
+    <pluginName>,
+    envx
+};
+`
 
 const getBuildEnvironment = () => {
     try {
@@ -13,39 +24,56 @@ const getBuildEnvironment = () => {
     }
 };
 
-const buildPrepare = () => {
-    const envFilePrefix = getBuildEnvironment();
-    const envFile = `${envFilePrefix}.${EXT}`;
+const readEnvContent = (pathOfFile) => {
     try {
-        const fs = require('fs');
-        const file = fs.readFileSync(envFile, 'utf-8');
-        // Run the compiler
-        const comp = new ByteComiler(new Parser(envFile, file));
-        runBytecode(comp.compile());
+        const  fs = require('fs');
+        return fs.readFileSync(pathOfFile, 'utf-8');
     } catch (err) {
-        console.error("error::buildPrepair: file read failed!!!");
-        throw err;
+        return '';
     }
-};
+}
 
-
-const runEnv = () => {
+const runBuild = (pluginName) => {
     const envFilePrefix = getBuildEnvironment();
     const envFile = `${envFilePrefix}.${EXT}`;
+    const file = readEnvContent(envFile, 'utf-8');
+    // Run the compiler
+    const comp  = new ByteComiler(new Parser(envFile, file));
+    const bytes = comp.compile().join(', ');
+    
+    // Write the compiled bytecode to index.js
+    const template = TEMPLATE
+        .replace('<code>', bytes)
+        .replaceAll('<pluginName>', pluginName);
+
     try {
         const fs = require('fs');
-        const file = fs.readFileSync(envFile, 'utf-8');
-        // Run the compiler
-        const comp = new ByteComiler(new Parser(envFile, file));
-        runBytecode(comp.compile());
+        const path = require('path');
+        fs.writeFileSync(path.join(path.dirname(__dirname), 'index.js'), template);
     } catch (err) {
-        console.error("error::buildPrepair: file read failed!!!");
+        console.error("error::runBuild: file write failed!!!");
         throw err;
     }
 }
 
+/**
+ * @brief Vite plugin for envx
+ * @param {Object} options
+ * @returns void 
+ */
+function envxPluginVite(options = {}) {
+    return {
+        name: 'envx-vite-plugin', // required, will show up in warnings and errors
+        config(config, { command }) {
+            if (command === 'serve' || command === 'build') {
+                runBuild(PLUGIN_VITE);
+            }
+        }
+    };
+}
+
 module.exports = {
-    buildPrepare,
-    runEnv,
+    runBytecode,
+    envxPluginVite,
     envx
 }

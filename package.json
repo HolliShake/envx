@@ -1,10 +1,10 @@
 {
   "name": "dto-envx",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "A dynamic environment variable evaluator",
   "main": "./index.js",
   "scripts": {
-    "build": "node ./src/index.js"
+    "build": "node ./index.js"
   },
   "author": "Philipp Andrew Roa Redondo",
   "license": "MIT"
