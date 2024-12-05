@@ -1,0 +1,12 @@
+{
+  "name": "envx-doy",
+  "version": "1.0.0",
+  "description": "environment prototype",
+  "main": "app.js",
+  "scripts": {
+    "build": "node app.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}
