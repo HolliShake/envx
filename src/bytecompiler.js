@@ -468,12 +468,6 @@ class ByteComiler extends Visitor {
         // endif
         const endIfCount = this.bytecode.length - endIf;
         setBytes(this.bytecode, endJumpIndex, 4, endIfCount);
-
-        const ifcode = []
-        for (let i = base;i < this.bytecode.length; i++) {
-            ifcode.push(`${i} := ${this.bytecode[i]}`);
-        }
-        console.log("IF:", ifcode, ifcode.length);
     }
 
     astfn(node) {
@@ -586,8 +580,7 @@ class ByteComiler extends Visitor {
             OPCODE.RETURN
         ]);
         this.scope = old;
-        console.log(this.bytecode);
-        runBytecode(this.bytecode);
+        return this.bytecode;
     }
 }
 

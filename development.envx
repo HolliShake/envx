@@ -1,6 +1,5 @@
 
 
-
 var REACT_APP_API_URL="https://madafaka.io/api";
 
 const KKL = REACT_APP_API_URL + "<<" + ">>";

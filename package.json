@@ -1,12 +1,11 @@
 {
-  "name": "envx-doy",
+  "name": "dto-envx",
   "version": "1.0.0",
-  "description": "environment prototype",
-  "main": "app.js",
+  "description": "A dynamic environment variable evaluator",
+  "main": "./index.js",
   "scripts": {
-    "build": "node app.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "node ./src/index.js"
   },
-  "author": "",
-  "license": "ISC"
+  "author": "Philipp Andrew Roa Redondo",
+  "license": "MIT"
 }

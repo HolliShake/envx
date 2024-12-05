@@ -91,6 +91,25 @@ const CONSTRUCTOR_JSFN = Object.freeze({
     }
 })
 
+const valueToJsObj = (value) => {
+    switch (value.dtype?.name ?? null) {
+        case ValueType.NUMBER:
+            return value.value;
+        case ValueType.STRING:
+            return value.value;
+        case ValueType.BOOL:
+            return value.value;
+        case ValueType.ERROR:
+            return value.value.toString();
+        case ValueType.NULL:
+        case ValueType.SCRIPT:
+        case ValueType.FN:
+        case ValueType.JSFN:
+        default:
+            return null;
+    }
+}
+
 const get4Number = (pc, codeArray) => {
     let value = 0;
     for (let i = 0; i < 4; i++) {
@@ -278,24 +297,26 @@ const binNe = (state) => {
 function callScript(state, valueOfTypeScript) {
     // Save current scope
     state.env.push(state.scope);
-    state.scope = {
+    const current = state.scope = {
         "$": state.scope //parent
     };
     load(state); // load builtins when script is called
     execute(state, valueOfTypeScript);
     // Restore scope
     state.scope = state.env.pop();
+    return current;
 }
 
 function callFn(state, valueOfTypeOfFn) {
     // Save current scope
     state.env.push(state.scope);
-    state.scope = {
+    const current = state.scope = {
         "$": state.scope //parent
     };
     execute(state, valueOfTypeOfFn);
     // Restore scope
     state.scope = state.env.pop();
+    return current;
 }
 
 function callJsFn(state, valueOfTypeJsfFn, argc) {
@@ -548,7 +569,6 @@ function execute(state, valueOfTypeScriptOrFn) {
     }
 }
 
-
 function load(state) {
     state.scope["println"]
         = new Value(CONSTRUCTOR_JSFN, ({
@@ -561,6 +581,8 @@ function load(state) {
         }));
 }
 
+var ENVXGLOBAL = ({});
+
 function runBytecode(arrayOfBytes) {
     const state = ({
         stack: [],
@@ -572,12 +594,23 @@ function runBytecode(arrayOfBytes) {
         args: 0,
         code: arrayOfBytes
     }));
-    callScript(state, asValue);
+    const env = callScript(state, asValue);
     if (state.stack.length != 1)
         console.error(`Runtime error: stack is not empty (${state.stack.length})`);
+    // Save
+    const keys = Object.keys(env).filter(k => !k.startsWith("$"));
+    for (let i = 0;i < keys.length; i++) {
+        const key = keys[i];
+        ENVXGLOBAL[key] = valueToJsObj(env[key]);
+    }
+}
+
+function envx(variableName) {
+    return ENVXGLOBAL[variableName];
 }
 
 module.exports = {
-    runBytecode
+    runBytecode,
+    envx
 }
 

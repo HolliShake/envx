@@ -1,6 +1,6 @@
-const { ByteComiler } = require('./bytecompiler.js');
 const { Parser } = require('./parser.js');
-const { Tokenizer } = require('./tokenizer.js');
+const { ByteComiler } = require('./bytecompiler.js');
+const { runBytecode, envx } = require('./runtime.js');
 
 const EXT = 'envx';
 
@@ -13,20 +13,39 @@ const getBuildEnvironment = () => {
     }
 };
 
-const buildPrepair = async () => {
+const buildPrepare = () => {
     const envFilePrefix = getBuildEnvironment();
     const envFile = `${envFilePrefix}.${EXT}`;
     try {
-        const fs = await import('fs');
+        const fs = require('fs');
         const file = fs.readFileSync(envFile, 'utf-8');
-
+        // Run the compiler
         const comp = new ByteComiler(new Parser(envFile, file));
-        comp.compile();
-        fs.writeFileSync('index.js', (`>>${file}`));
+        runBytecode(comp.compile());
     } catch (err) {
         console.error("error::buildPrepair: file read failed!!!");
         throw err;
     }
 };
 
-buildPrepair();
+
+const runEnv = () => {
+    const envFilePrefix = getBuildEnvironment();
+    const envFile = `${envFilePrefix}.${EXT}`;
+    try {
+        const fs = require('fs');
+        const file = fs.readFileSync(envFile, 'utf-8');
+        // Run the compiler
+        const comp = new ByteComiler(new Parser(envFile, file));
+        runBytecode(comp.compile());
+    } catch (err) {
+        console.error("error::buildPrepair: file read failed!!!");
+        throw err;
+    }
+}
+
+module.exports = {
+    buildPrepare,
+    runEnv,
+    envx
+}
