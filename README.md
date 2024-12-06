@@ -5,8 +5,29 @@
 
 ### Support
 - [x] Vite support
-- [ ] React support
+- [ ] Webpack support
 
+### Features
+- [x] if/else statement
+- [ ] switch statement and expression
+- [ ] class declairation
+- [x] function declairation
+- [x] number
+- [x] string
+- [x] boolean
+- [x] null
+- [ ] undefined
+- [x] array
+- [x] method call
+- [x] function call
+- [x] attribute access
+- [ ] index
+- [ ] object/hashmap
+- [x] while loop
+- [x] do-while loop
+- [ ] for loop
+- [x] type prototypes for method
+- [x] JS interoperability
 
 ### How to use
 
