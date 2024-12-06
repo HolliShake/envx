@@ -60,3 +60,19 @@ println(2 % 2, 4 + 1);
 
 println(2 == 2);
 ```
+
+### Example code: Javascript interpolation
+```js
+const { envx, runTest, envxCall } = require('dto-envx/src/app.js');
+
+runTest();
+
+console.log("JS:>>", envx    ('REACT_APP_API_URL'));
+console.log("JS:>>", envxCall("fact", 5));
+console.log("JS:>>", envxCall("add" , 69, 420));
+console.log("JS:>>", envx    ('PRIVATE_HASH')); // hidden private variable bast nag start sa 'PRIVATE_'
+console.log("JS:>>", envxCall("getHash")); // Need ug getter para ma access ang private variable
+console.log("JS:>>", envxCall("println", "From dto-envx :>>", 1, 2, 4, 5, 6, "Hello!"));
+
+console.log("JS:>>", envxCall("printArray", [6,9,4,2,0]));
+```
