@@ -9,7 +9,8 @@ const ValueType  = Object.freeze({
     STRING : "string",
     BOOL   : "bool",
     NULL   : "null",
-    ERROR  : "error"
+    ERROR  : "error",
+    ARRAY  : "array"
 });
 
 class Value {
@@ -32,6 +33,10 @@ class Value {
                 return "null";
             case ValueType.ERROR:
                 return this.value;
+            case ValueType.ARRAY: {
+                let str = "[" + this.value.map((v) => (this == v) ? "[self]" : v.toString()).join(", ") + "]";
+                return str;
+            }
             case ValueType.FN:
                 return `<function ${this.value.name} />`;
             case ValueType.JSFN:
@@ -44,32 +49,46 @@ class Value {
     }
 }
 
+
 const CONSTRUCTOR_FN = ({
     "name": ValueType.FN,
     "private.static.new": function(state, value) {
         state.stack.push(new Value(CONSTRUCTOR_FN, value));
     }
-})
+});
 
 const CONSTRUCTOR_JSFN = ({
     "name": ValueType.JSFN,
     "private.static.new": function(state, value) {
         state.stack.push(new Value(CONSTRUCTOR_FN, value));
     }
-})
+});
+
+const BASE_PROPERTIES = ({
+    "toString": new Value(CONSTRUCTOR_JSFN, ({
+        name: "toString",
+        args: 0,
+        code: function(state, ...args) {
+            CONSTRUCTOR_STRING["private.static.new"](state, args[0].toString());
+        }
+    })),
+});
 
 const CONSTRUCTOR_ERROR = Object.freeze({
+    ...BASE_PROPERTIES,
     "name": ValueType.ERROR,
     "private.static.new": function(state, value) {
         state.stack.push(new Value(CONSTRUCTOR_ERROR, value));
     }
-})
+});
 
 const CONSTRUCTOR_TYPE = ({
+    ...BASE_PROPERTIES,
     "name": ValueType.TYPE,
-})
+});
 
 const CONSTRUCTOR_NUMBER = ({
+    ...BASE_PROPERTIES,
     "name": ValueType.NUMBER,
     "private.static.new": function(state, value) {
         state.stack.push(new Value(CONSTRUCTOR_NUMBER, value));
@@ -131,6 +150,7 @@ const CONSTRUCTOR_NUMBER = ({
 });
 
 const CONSTRUCTOR_STRING = ({
+    ...BASE_PROPERTIES,
     "name": ValueType.STRING,
     "private.static.new": function(state, value) {
         state.stack.push(new Value(CONSTRUCTOR_STRING, value));
@@ -145,24 +165,76 @@ const CONSTRUCTOR_STRING = ({
             binAdd(state);
         }
     })),
-})
+});
 
 const CONSTRUCTOR_BOOL = ({
+    ...BASE_PROPERTIES,
     "name": ValueType.BOOL,
     "private.static.new": function(state, value) {
         state.stack.push(new Value(CONSTRUCTOR_BOOL, value));
     }
-})
+});
 
 const CONSTRUCTOR_NULL = Object.freeze({
+    ...BASE_PROPERTIES,
     "name": ValueType.NULL,
     "private.static.new": function(state) {
         state.stack.push(new Value(CONSTRUCTOR_NULL, null));
     }
-})
+});
+
+const CONSTRUCTOR_ARRAY = ({
+    ...BASE_PROPERTIES,
+    "name": ValueType.ARRAY,
+    "private.static.new": function(state, value) {
+        state.stack.push(new Value(CONSTRUCTOR_ARRAY, value));
+    },
+    /****************/
+    "push": new Value(CONSTRUCTOR_JSFN, ({
+        name: "push",
+        args: -1,
+        code: function(state, ...args) {
+            const obj = args[0];
+            obj.value.push(...[...args].slice(1));
+            CONSTRUCTOR_NULL['private.static.new'](state)
+        }
+    })),
+    "pop": new Value(CONSTRUCTOR_JSFN, ({
+        name: "pop",
+        args: 0,
+        code: function(state, ...args) {
+            if (args[0].value.length == 0) {
+                CONSTRUCTOR_ERROR["private.static.new"](state, "IndexError: pop from empty list");
+                return;
+            }
+            const obj = args[0];
+            state.stack.push(obj.value.pop());
+        }
+    })),
+    "peek": new Value(CONSTRUCTOR_JSFN, ({
+        name: "peek",
+        args: 0,
+        code: function(state, ...args) {
+            if (args[0].value.length == 0) {
+                CONSTRUCTOR_ERROR["private.static.new"](state, "IndexError: peek from empty list");
+                return;
+            }
+            const obj = args[0];
+            state.stack.push(obj.value[obj.value.length - 1]);
+        }
+    })),
+    "length": new Value(CONSTRUCTOR_JSFN, ({
+        name: "length",
+        args: 0,
+        code: function(state, ...args) {
+            const obj = args[0];
+            CONSTRUCTOR_NUMBER["private.static.new"](state, obj.value.length);
+        }
+    })),
+});
 
 const valueToJsObj = (value) => {
-    switch (value.dtype?.name ?? null) {
+    switch (value?.dtype?.name ?? null) {
         case ValueType.NUMBER:
             return value.value;
         case ValueType.STRING:
@@ -171,10 +243,12 @@ const valueToJsObj = (value) => {
             return value.value;
         case ValueType.ERROR:
             return value.value.toString();
-        case ValueType.NULL:
+        case ValueType.ARRAY:
+            return value.value.map(x => valueToJsObj(x));
         case ValueType.SCRIPT:
         case ValueType.FN:
         case ValueType.JSFN:
+        case ValueType.NULL:
         default:
             return null;
     }
@@ -187,6 +261,8 @@ const jsObjToValue = (jsObj) => {
         return new Value(CONSTRUCTOR_STRING, jsObj);
     } else if (typeof jsObj === "boolean") {
         return new Value(CONSTRUCTOR_BOOL, jsObj);
+    } else if (jsObj && jsObj.constructor.name == "Array") {
+        return new Value(CONSTRUCTOR_ARRAY, jsObj.map(x => jsObjToValue(x)));
     } else {
         return new Value(CONSTRUCTOR_NULL, null);
     }
@@ -535,6 +611,20 @@ function execute(state, valueOfTypeScriptOrFn) {
                 pc += 1;
                 break;
             }
+            case OPCODE.MAKE_ARRAY: {
+                const size = get4Number(pc + 1, code);
+
+                const arr = [];
+                for (let i = 0; i < size; i++) {
+                    arr.push(state.stack.pop());
+                }
+                
+                CONSTRUCTOR_ARRAY["private.static.new"](state, arr);
+
+                // 4 bytes for size + next
+                pc += 4 + 1;
+                break;
+            }
             case OPCODE.LOAD_NAME: {
                 let index = pc + 1;
                 let name = ""
@@ -711,6 +801,35 @@ function execute(state, valueOfTypeScriptOrFn) {
                 pc += name.length + 1 + 1;
                 break;
             }
+            case OPCODE.SET_ATTRIBUTE: {
+                const obj = state.stack.pop();
+                const val = state.stack.pop();
+                
+                let index = pc + 1;
+                let name = ""
+                while (code[index] != 0) {
+                    name += String.fromCharCode(code[index]);
+                    index++;
+                }
+
+                switch (obj.dtype.name) {
+                    case ValueType.TYPE: {
+                        obj.value[name] = val;
+                        break
+                    }
+                    default: {
+                        // Allow fault tolerance
+                        // when object is not type
+                        // at runtime
+                        CONSTRUCTOR_ERROR["private.static.new"](state, `TypeError: ${obj.dtype.name} object does not support item assignment`);
+                        break;
+                    }
+                }
+
+                // (name + 1nullchr) + next
+                pc += name.length + 1 + 1;
+                break;
+            }
             case OPCODE.LOG_NOT: {
                 logNot(state);
                 pc += 1;
@@ -840,12 +959,16 @@ function execute(state, valueOfTypeScriptOrFn) {
                 break;
             }
             case OPCODE.POP_TOP: {
-                state.stack.pop();
+                const t = state.stack.pop();
+                if (!t) {
+                    throw new Error("Runtime error: stack is empty");
+                }
                 pc += 1;
                 break;
             }
             case OPCODE.DUP_TOP: {
-                state.stack.push(state.stack[state.stack.length - 1]);
+                const top = state.stack[state.stack.length - 1];
+                state.stack.push(top);
                 pc += 1;
                 break;
             }
@@ -868,6 +991,7 @@ function execute(state, valueOfTypeScriptOrFn) {
             }
             default: {
                 console.error(`Unknown opcode: ${getOpCodeName(opcode)}`);
+                throw new Error(`Unknown opcode: ${getOpCodeName(opcode)}`);
                 return;
             }
         }
@@ -921,8 +1045,10 @@ function runBytecode(arrayOfBytes) {
         code: arrayOfBytes
     }));
     const env = callScript(STATE, asValue);
-    if (STATE.stack.length != 1)
+    if (STATE.stack.length != 1) {
         console.error(`Runtime error: stack is not empty (${STATE.stack.length})`);
+        throw new Error("Runtime error: stack is not empty");
+    }
     // Save global names but not executable
     const keys0 = Object.keys(env).filter(k => !k.startsWith("$"));
     for (let i = 0;i < keys0.length; i++) {

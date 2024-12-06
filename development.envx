@@ -78,11 +78,11 @@ fn getHash() {
     return PRIVATE_HASH;
 }
 
-
 h1 = 2;
 println(h1 -= 1);
 
 var y = 10;
+
 y *= 2;
 println("y :=", y);
 
@@ -154,3 +154,24 @@ println(">>", Number.add(3, 3) * 6);
 println("Hello".concat("_" + "World!"));
 
 println(Boolean);
+
+fn isOdd() {
+    return this % 2 != 0;
+}
+
+Number.isOdd = isOdd;
+
+
+println((101).isOdd());
+
+const arr = [1,2,3];
+
+arr.push(4);
+arr.push(5);
+
+println(arr, arr.peek(), arr.length());
+
+fn printArray(arr) {
+    println(arr);
+    return arr.toString();
+}

@@ -63,6 +63,9 @@ class Visitor {
             case Ast.STRING:
                 this.astString(node);
                 break;
+            case Ast.ARRAY:
+                this.astMakeArray(node);
+                break;
             case Ast.ACCESS:
                 this.astAccess(node);
                 break;
@@ -285,6 +288,17 @@ class ByteComiler extends Visitor {
         ]);
     }
 
+    astMakeArray(node) {
+        const elements = node.elements.reverse();
+        for (let i = 0; i < elements.length; i++) {
+            this.visit(elements[i]);
+        }
+        this.bytecode.push(...[
+            OPCODE.MAKE_ARRAY,
+            ...slice4Number(elements.length)
+        ]);
+    }
+
     astAccess(node) { 
         this.visit(node.object);
 
@@ -456,6 +470,17 @@ class ByteComiler extends Visitor {
                 this.bytecode.push(...[
                     (symbol.isGloal) ? OPCODE.STORE_GLOBAL : OPCODE.STORE_NAME,
                     ...sliceWord(toWrite)
+                ]);
+                break;
+            }
+            case Ast.ACCESS: {
+                this.visit(node.object);
+                if (node.member.type != Ast.ID) {
+                    throwError(this.parser.tokenizer.envName, this.parser.tokenizer.data, `Expected identifier but got ${node.member.type}`, node.member.position);
+                }
+                this.bytecode.push(...[
+                    OPCODE.SET_ATTRIBUTE,
+                    ...sliceWord(node.member.value)
                 ]);
                 break;
             }
