@@ -110,6 +110,18 @@ const valueToJsObj = (value) => {
     }
 }
 
+const jsObjToValue = (jsObj) => {
+    if (typeof jsObj === "number") {
+        return new Value(CONSTRUCTOR_NUMBER, jsObj);
+    } else if (typeof jsObj === "string") {
+        return new Value(CONSTRUCTOR_STRING, jsObj);
+    } else if (typeof jsObj === "boolean") {
+        return new Value(CONSTRUCTOR_BOOL, jsObj);
+    } else {
+        return SINGLETON_NULL;
+    }
+}
+
 const get4Number = (pc, codeArray) => {
     let value = 0;
     for (let i = 0; i < 4; i++) {
@@ -135,6 +147,55 @@ const nameLookup = (name, scope) => {
         current = current["$"];
     }
     return null;
+}
+
+const getGlobalScope = (scope) => {
+    let current = scope;
+    while (current["$"] != null) {
+        current = current["$"];
+    }
+    return current;
+}
+
+const logNot = (state) => {
+    const a = state.stack.pop();
+    CONSTRUCTOR_BOOL["static.new"](state, !a.value);
+}
+
+const bitNot = (state) => {
+    const a = state.stack.pop();
+    if (a.dtype.name == ValueType.NUMBER) {
+        CONSTRUCTOR_NUMBER["static.new"](state, ~a.value);
+    } else {
+        // Allow fault tolerance
+        // when operands are not compatible
+        // at runtime
+        CONSTRUCTOR_ERROR["static.new"](state, `TypeError: unsupported operand type(s) for ~: '${a.dtype.name}'`);
+    }
+}
+
+const pos = (state) => {
+    const a = state.stack.pop();
+    if (a.dtype.name == ValueType.NUMBER) {
+        CONSTRUCTOR_NUMBER["static.new"](state, +a.value);
+    } else {
+        // Allow fault tolerance
+        // when operands are not compatible
+        // at runtime
+        CONSTRUCTOR_ERROR["static.new"](state, `TypeError: bad operand type for unary +: '${a.dtype.name}'`);
+    }
+}
+
+const neg = (state) => {
+    const a = state.stack.pop();
+    if (a.dtype.name == ValueType.NUMBER) {
+        CONSTRUCTOR_NUMBER["static.new"](state, -a.value);
+    } else {
+        // Allow fault tolerance
+        // when operands are not compatible
+        // at runtime
+        CONSTRUCTOR_ERROR["static.new"](state, `TypeError: bad operand type for unary -: '${a.dtype.name}'`);
+    }
 }
 
 const binMul = (state) => {
@@ -294,6 +355,45 @@ const binNe = (state) => {
     CONSTRUCTOR_BOOL["static.new"](state, a.value !== b.value);
 }
 
+const binAnd = (state) => {
+    const b = state.stack.pop();
+    const a = state.stack.pop();
+    if (a.dtype.name == ValueType.NUMBER && b.dtype.name == ValueType.NUMBER) {
+        CONSTRUCTOR_NUMBER["static.new"](state, a.value & b.value);
+    } else {
+        // Allow fault tolerance
+        // when operands are not compatible
+        // at runtime
+        CONSTRUCTOR_ERROR["static.new"](state, `TypeError: unsupported operand type(s) for &: '${a.dtype.name}' and '${b.dtype.name}'`);
+    }
+}
+
+const binOr = (state) => {
+    const b = state.stack.pop();
+    const a = state.stack.pop();
+    if (a.dtype.name == ValueType.NUMBER && b.dtype.name == ValueType.NUMBER) {
+        CONSTRUCTOR_NUMBER["static.new"](state, a.value | b.value);
+    } else {
+        // Allow fault tolerance
+        // when operands are not compatible
+        // at runtime
+        CONSTRUCTOR_ERROR["static.new"](state, `TypeError: unsupported operand type(s) for |: '${a.dtype.name}' and '${b.dtype.name}'`);
+    }
+}
+
+const binXor = (state) => {
+    const b = state.stack.pop();
+    const a = state.stack.pop();
+    if (a.dtype.name == ValueType.NUMBER && b.dtype.name == ValueType.NUMBER) {
+        CONSTRUCTOR_NUMBER["static.new"](state, a.value ^ b.value);
+    } else {
+        // Allow fault tolerance
+        // when operands are not compatible
+        // at runtime
+        CONSTRUCTOR_ERROR["static.new"](state, `TypeError: unsupported operand type(s) for ^: '${a.dtype.name}' and '${b.dtype.name}'`);
+    }
+}
+
 function callScript(state, valueOfTypeScript) {
     // Save current scope
     state.env.push(state.scope);
@@ -446,6 +546,38 @@ function execute(state, valueOfTypeScriptOrFn) {
                 pc += name.length + 1 + 1;
                 break;
             }
+            case OPCODE.STORE_GLOBAL: {
+                let index = pc + 1;
+                let name = ""
+                while (code[index] != 0) {
+                    name += String.fromCharCode(code[index]);
+                    index++;
+                }
+                getGlobalScope(state.scope)[name] = state.stack.pop();
+                // (name + 1nullchr) + next
+                pc += name.length + 1 + 1;
+                break;
+            }
+            case OPCODE.LOG_NOT: {
+                logNot(state);
+                pc += 1;
+                break;
+            }
+            case OPCODE.BIT_NOT: {
+                bitNot(state);
+                pc += 1;
+                break;
+            }
+            case OPCODE.POS: {
+                pos(state);
+                pc += 1;
+                break;
+            }
+            case OPCODE.NEG: {
+                neg(state);
+                pc += 1;
+                break;
+            }
             case OPCODE.BIN_MUL: {
                 binMul(state);
                 pc += 1;
@@ -511,6 +643,21 @@ function execute(state, valueOfTypeScriptOrFn) {
                 pc += 1;
                 break;
             }
+            case OPCODE.BIN_AND: {
+                binAnd(state);
+                pc += 1;
+                break;
+            }
+            case OPCODE.BIN_OR: {
+                binOr(state);
+                pc += 1;
+                break;
+            }
+            case OPCODE.BIN_XOR: {
+                binXor(state);
+                pc += 1;
+                break;
+            }
             case OPCODE.MAKE_FUNCTION: {
                 let index = pc + 1;
                 let name = ""
@@ -541,6 +688,11 @@ function execute(state, valueOfTypeScriptOrFn) {
             }
             case OPCODE.POP_TOP: {
                 state.stack.pop();
+                pc += 1;
+                break;
+            }
+            case OPCODE.DUP_TOP: {
+                state.stack.push(state.stack[state.stack.length - 1]);
                 pc += 1;
                 break;
             }
@@ -581,36 +733,94 @@ function load(state) {
         }));
 }
 
-var ENVXGLOBAL = ({});
+const ENVXGLOBAL = ({});
+const EXECUTABLE = ({});
 
+const STATE = ({
+    stack: [],
+    env: [],
+    scope: null
+})
+
+// API
 function runBytecode(arrayOfBytes) {
-    const state = ({
-        stack: [],
-        env: [],
-        scope: {}
-    })
     const asValue = new Value(ValueType.SCRIPT, ({
         name: "main",
         args: 0,
         code: arrayOfBytes
     }));
-    const env = callScript(state, asValue);
-    if (state.stack.length != 1)
-        console.error(`Runtime error: stack is not empty (${state.stack.length})`);
-    // Save
-    const keys = Object.keys(env).filter(k => !k.startsWith("$"));
-    for (let i = 0;i < keys.length; i++) {
-        const key = keys[i];
-        ENVXGLOBAL[key] = valueToJsObj(env[key]);
+    const env = callScript(STATE, asValue);
+    if (STATE.stack.length != 1)
+        console.error(`Runtime error: stack is not empty (${STATE.stack.length})`);
+    // Save global names but not executable
+    const keys0 = Object.keys(env).filter(k => !k.startsWith("$"));
+    for (let i = 0;i < keys0.length; i++) {
+        const key = keys0[i];
+        ENVXGLOBAL[key] = env[key];
     }
 }
 
+// API
 function envx(variableName) {
-    return ENVXGLOBAL[variableName];
+    const finalVariable = variableName || "";
+    if (finalVariable.toString().startsWith("PRIVATE_")) 
+        return null;
+    return valueToJsObj(ENVXGLOBAL[finalVariable]);
+}
+
+// API
+function envxCall(variableName, ...args) {
+    const fn = ENVXGLOBAL[variableName];
+    if (!fn)
+        return null;
+
+    if (fn.dtype.name != ValueType.FN && fn.dtype.name != ValueType.JSFN)
+        return null;
+
+    STATE.env.push(STATE.scope);
+    STATE.scope = {
+        "$": STATE.scope,
+        ...ENVXGLOBAL
+    };
+
+    if (fn.dtype.name != ValueType.FN && fn.dtype.name != ValueType.JSFN) {
+        // Allow fault tolerance
+        // when object is not callable
+        // at runtime
+
+        CONSTRUCTOR_ERROR["static.new"](STATE, `TypeError: ${fn.dtype.name} is not callable`);
+        return valueToJsObj(STATE.stack.pop());
+    }
+
+    if (fn.value.args != -1 && fn.value.args != args.length) {
+        // Allow fault tolerance
+        // when number of arguments
+        // does not match
+        // at runtime
+
+        CONSTRUCTOR_ERROR["static.new"](STATE, `TypeError: ${fn.value.name}() takes ${fn.value.args} arguments but ${args.length} were given`);
+        return valueToJsObj(STATE.stack.pop());
+    }
+    
+    const arguments = [...args].reverse().map((jsObj) => jsObjToValue(jsObj));
+    STATE.stack.push(...arguments);
+
+    switch (fn.dtype.name) {
+        case ValueType.FN:
+            callFn(STATE, fn);
+            STATE.scope = STATE.env.pop();
+            return valueToJsObj(STATE.stack.pop());
+        case ValueType.JSFN:
+            callJsFn(STATE, fn, args.length);
+            return valueToJsObj(STATE.stack.pop());
+        default:
+            return null;
+    }
 }
 
 module.exports = {
     runBytecode,
-    envx
+    envx,
+    envxCall
 }
 

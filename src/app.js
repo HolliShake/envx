@@ -1,6 +1,6 @@
 const { Parser } = require('./parser.js');
 const { ByteComiler } = require('./bytecompiler.js');
-const { runBytecode, envx } = require('./runtime.js');
+const { runBytecode, envx, envxCall } = require('./runtime.js');
 
 const EXT = 'envx';
 const PLUGIN_VITE = 'envxPluginVite';
@@ -56,6 +56,15 @@ const runBuild = (pluginName) => {
     }
 }
 
+const runTest = () => {
+    const envFilePrefix = getBuildEnvironment();
+    const envFile = `${envFilePrefix}.${EXT}`;
+    const file = readEnvContent(envFile, 'utf-8');
+    // Run the compiler
+    const comp  = new ByteComiler(new Parser(envFile, file));
+    runBytecode(comp.compile());
+}
+
 /**
  * @brief Vite plugin for envx
  * @param {Object} options
@@ -74,6 +83,8 @@ function envxPluginVite(options = {}) {
 
 module.exports = {
     runBytecode,
+    runTest,
     envxPluginVite,
-    envx
+    envx,
+    envxCall
 }

@@ -13,7 +13,7 @@ fn fact(n) {
 }
 
 fn add(a, b) {
-    return a - b;
+    return a + b;
 }
 
 println(add(50, 2));
@@ -35,7 +35,7 @@ fn bark() {
     println(">>", sound, REACT_APP_API_URL);
 }
 
-const h = bark();
+var h = bark();
 println(h);
 
 println(">>:", fact(5));
@@ -47,3 +47,99 @@ println(2 % 2, 4 + 1);
 2 << 2;
 
 println(2 == 2);
+
+
+fn initH() {
+    h = 100 + 20;
+    h += 100;
+    println(">>>>>>>>>", h);
+}
+
+println("before >>", h);
+initH();
+println("after >>", h);
+
+
+fn jsCallTest(a, b) {
+    const x = "Hola!";
+    println(">>", x);
+    return a << b;
+}
+
+const REACT_API_URL = "https://optimumhr-api.ustp.edu.ph/api";
+
+fn getApiName(a,b,c) {
+    return REACT_API_URL;
+}
+
+const PRIVATE_HASH = "qsdad123q3";
+
+fn getHash() {
+}
+
+
+h1 = 2;
+println(h1 -= 1);
+
+var y = 10;
+y *= 2;
+println("y :=", y);
+
+y /= 2;
+println("y :=", y);
+
+y %= 2;
+println("y :=", y);
+
+y += 10;
+println("y :=", y);
+
+y -= 5;
+println("y :=", y); 
+
+y <<= 1;
+println("y :=", y);
+
+y >>= 1;
+println("y :=", y);
+
+y &= 1;
+println("y :=", y);
+
+y |= 1;
+println("y :=", y);
+
+y ^= 1;
+println("y :=", y);
+
+println(!2);
+
+var i = 0;
+
+while (i < 5) {
+    println("i :=", i);
+    i += 1;
+}
+
+println(0xff);
+
+do {
+    println("i :=", i);
+    i -= 1;
+} while (i > 0)
+
+var qq = 0;
+
+do {
+    if (qq == 2) {
+        qq += 1;
+        continue;
+    }
+    if (qq >= 5) {
+        {
+            break;
+        }
+    }
+    println(qq);
+    qq += 1;
+} while(qq != 200)

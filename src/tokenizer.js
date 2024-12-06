@@ -3,6 +3,7 @@ const { throwError } = require("./error.js");
 const Keywords = Object.freeze([
     'if',
     'else',
+    'do',
     'while',
     'for',
     'break',
@@ -161,7 +162,7 @@ class Tokenizer {
         }
         return ({
             type: TokenType.NUMBER,
-            value: token,
+            value: Number(token).toString(),
             position: pos
         });
     }

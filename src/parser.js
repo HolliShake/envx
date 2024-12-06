@@ -11,6 +11,10 @@ const Ast = Object.freeze({
     ACCESS  : "ACCESS",
     CALL    : "CALL",
     INDEX   : "INDEX",
+    LNOT    : "LNOT",
+    BNOT    : "BNOT",
+    POS     : "POS",
+    NEG     : "NEG",
     BIN_MUL : "BIN_MUL",
     BIN_DIV : "BIN_DIV",
     BIN_MOD : "BIN_MOD",
@@ -29,6 +33,17 @@ const Ast = Object.freeze({
     BIN_XOR : "BIN_XOR",
     BIN_LAND: "BIN_LAND",
     BIN_LOR : "BIN_LOR",
+    BIN_ASSIGN: "BIN_ASSIGN",
+    BIN_MUL_ASS: "BIN_MUL_ASS",
+    BIN_DIV_ASS: "BIN_DIV_ASS",
+    BIN_MOD_ASS: "BIN_MOD_ASS",
+    BIN_ADD_ASS: "BIN_ADD_ASS",
+    BIN_SUB_ASS: "BIN_SUB_ASS",
+    BIN_SHL_ASS: "BIN_SHL_ASS",
+    BIN_SHR_ASS: "BIN_SHR_ASS",
+    BIN_AND_ASS: "BIN_AND_ASS",
+    BIN_OR_ASS: "BIN_OR_ASS",
+    BIN_XOR_ASS: "BIN_XOR_ASS",
     EXPR_STMNT: "EXPR_STMNT",
     EMPTY   : "EMPTY",
     VAR     : "VAR",
@@ -36,6 +51,11 @@ const Ast = Object.freeze({
     LOCAL   : "LOCAL",
     IF      : "IF",
     FN      : "FN",
+    WHILE   : "WHILE",
+    DO_WHILE: "DO_WHILE",
+    BLOCK   : "BLOCK",
+    CONTINUE: "CONTINUE",
+    BREAK   : "BREAK",
     RETURN_STMNT: "RETURN_STMNT",
     PROGRAM: "PROGRAM",
 });
@@ -185,15 +205,52 @@ class Parser {
         return node;
     }
 
+    unary() {
+        if (this.check("(")) {
+            this.consume("(");
+            const node = this.mandatory();
+            this.consume(")");
+            return node;
+        }
+        else if (this.check("!") || this.check("~") || this.check("-") || this.check("+")) {
+            const op = this.look.value;
+            this.consume(this.look.value);
+            const node = this.unary();
+            if (!node) {
+                throwError(this.tokenizer.envName, this.tokenizer.data, `Expected unary but found ${this.look.value}`, this.look.position);
+            }
+            return ({
+                type: (function() {
+                    if (op == "!") {
+                        return Ast.LNOT;
+                    }
+                    else if (op == "~") {
+                        return Ast.BNOT;
+                    }
+                    else if (op == "+") {
+                        return Ast.BIN_POS;
+                    }
+                    else if (op == "-") {
+                        return Ast.BIN_NEG;
+                    }
+                })(),
+                op: op,
+                right: node,
+                position: mergePos(this.prev.position, node.position)
+            });
+        }
+        return this.memberOrCall();
+    }
+
     mul() {
-        let node = this.memberOrCall();
+        let node = this.unary();
         if (!node) {
             return node;
         }
         while (this.check("*") || this.check("/") || this.check("%")) {
             const op = this.look.value;
             this.consume(this.look.value);
-            const right = this.memberOrCall();
+            const right = this.unary();
             if (!right) {
                 throwError(this.tokenizer.envName, this.tokenizer.data, `Expected terminal but found ${this.look.value}`, this.look.position);
             }
@@ -407,12 +464,174 @@ class Parser {
         return node;
     }
 
+    simpleAssign() {
+        let node = this.logic();
+        if (!node) {
+            return node;
+        }
+        while (this.check("=")) {
+            const op = this.look.value;
+            this.consume(this.look.value);
+            const right = this.logic();
+            if (!right) {
+                throwError(this.tokenizer.envName, this.tokenizer.data, `Expected logic but found ${this.look.value}`, this.look.position);
+            }
+            node = ({
+                type: Ast.BIN_ASSIGN,
+                op: op,
+                left: node,
+                right: right,
+                position: mergePos(node.position, right.position)
+            });
+        }
+        return node
+    }
+
+    augmentedMulAssign() {
+        let node = this.simpleAssign();
+        if (!node) {
+            return node;
+        }
+        while (
+            this.check("*=") ||
+            this.check("/=") ||
+            this.check("%=")
+        ) {
+            const op = this.look.value;
+            this.consume(this.look.value);
+            const right = this.logic();
+            if (!right) {
+                throwError(this.tokenizer.envName, this.tokenizer.data, `Expected assignment but found ${this.look.value}`, this.look.position);
+            }
+            node = ({
+                type: (function() {
+                    if (op == "*=") {
+                        return Ast.BIN_MUL_ASS;
+                    }
+                    else if (op == "/=") {
+                        return Ast.BIN_DIV_ASS;
+                    }
+                    else if (op == "%=") {
+                        return Ast.BIN_MOD_ASS;
+                    }
+                })(),
+                op: op,
+                left: node,
+                right: right,
+                position: mergePos(node.position, right.position)
+            });
+        }
+        return node;
+    }
+
+    augmentedAddAssign() {
+        let node = this.augmentedMulAssign();
+        if (!node) {
+            return node;
+        }
+        while (
+            this.check("+=") ||
+            this.check("-=")
+        ) {
+            const op = this.look.value;
+            this.consume(this.look.value);
+            const right = this.augmentedMulAssign();
+            if (!right) {
+                throwError(this.tokenizer.envName, this.tokenizer.data, `Expected assignment but found ${this.look.value}`, this.look.position);
+            }
+            node = ({
+                type: (function() {
+                    if (op == "+=") {
+                        return Ast.BIN_ADD_ASS;
+                    }
+                    else if (op == "-=") {
+                        return Ast.BIN_SUB_ASS;
+                    }
+                })(),
+                op: op,
+                left: node,
+                right: right,
+                position: mergePos(node.position, right.position)
+            });
+        }
+        return node;
+    }
+
+    augmentedShiftAssign() {
+        let node = this.augmentedAddAssign();
+        if (!node) {
+            return node;
+        }
+        while (
+            this.check("<<=") ||
+            this.check(">>=")
+        ) {
+            const op = this.look.value;
+            this.consume(this.look.value);
+            const right = this.augmentedAddAssign();
+            if (!right) {
+                throwError(this.tokenizer.envName, this.tokenizer.data, `Expected assignment but found ${this.look.value}`, this.look.position);
+            }
+            node = ({
+                type: (function() {
+                    if (op == "<<=") {
+                        return Ast.BIN_SHL_ASS;
+                    }
+                    else if (op == ">>=") {
+                        return Ast.BIN_SHR_ASS;
+                    }
+                })(),
+                op: op,
+                left: node,
+                right: right,
+                position: mergePos(node.position, right.position)
+            });
+        }
+        return node;
+    }
+
+    augmentedBitAssign() {
+        let node = this.augmentedShiftAssign();
+        if (!node) {
+            return node;
+        }
+        while (
+            this.check("&=") ||
+            this.check("|=") ||
+            this.check("^=")
+        ) {
+            const op = this.look.value;
+            this.consume(this.look.value);
+            const right = this.augmentedShiftAssign();
+            if (!right) {
+                throwError(this.tokenizer.envName, this.tokenizer.data, `Expected assignment but found ${this.look.value}`, this.look.position);
+            }
+            node = ({
+                type: (function() {
+                    if (op == "&=") {
+                        return Ast.BIN_AND_ASS;
+                    }
+                    else if (op == "|=") {
+                        return Ast.BIN_OR_ASS;
+                    } else if (op == "^=") {
+                        return Ast.BIN_XOR_ASS;
+                    }
+                })(),
+                op: op,
+                left: node,
+                right: right,
+                position: mergePos(node.position, right.position)
+            });
+        }
+        return node;
+    }
+
     primary() {
-        return this.logic();
+        return this.augmentedBitAssign();
     }
 
     mandatory() {
-        const node = this.primary();
+        let node = this.primary();
         if (node) {
             return node;
         }
@@ -435,6 +654,21 @@ class Parser {
         else if (this.check("fn")) {
             return this.fn();
         }
+        else if (this.check("do")) {
+            return this.doWhile();
+        }
+        else if (this.check("while")) {
+            return this.whileStmnt();
+        }
+        else if (this.check("{")) {
+            return this.blockStmnt();
+        }
+        else if (this.check("continue")) {
+            return this.contiueStmnt();
+        }
+        else if (this.check("break")) {
+            return this.breakStmnt();
+        }
         else if (this.check("return")) {
             return this.returnStmnt();
         }
@@ -444,7 +678,7 @@ class Parser {
     returnStmnt() {
         let start = this.look.position, ended = {};
         this.consume("return");
-        const node = this.primary();
+        let node = this.primary();
         this.consume(";");
         ended = this.prev.position;
         return ({
@@ -456,7 +690,7 @@ class Parser {
 
     exprStmnt() {
         let start = this.look.position, ended = {};
-        const node = this.primary();
+        let node = this.primary();
         if (node) {
             this.consume(";");
             ended = this.prev.position;
@@ -694,6 +928,91 @@ class Parser {
             body: body,
             position: mergePos(start, ended)
         })
+    }
+
+    doWhile() {
+        let start = this.look.position, ended = {};
+        this.consume("do");
+        const body = this.statement();
+        if (!body) {
+            throwError(this.tokenizer.envName, this.tokenizer.data, `Expected statement but found ${this.look.value}`, this.look.position);
+        }
+        this.consume("while");
+        this.consume("(");
+        const condition = this.primary();
+        if (!condition) {
+            throwError(this.tokenizer.envName, this.tokenizer.data, `Expected primary but found ${this.look.value}`, this.look.position);
+        }
+        this.consume(")");
+        ended = this.prev.position;
+        return ({
+            type: Ast.DO_WHILE,
+            condition: condition,
+            body: body,
+            position: mergePos(start, ended)
+        });
+    }
+
+    whileStmnt() {
+        let start = this.look.position, ended = {};
+        this.consume("while");
+        this.consume("(");
+        const condition = this.primary();
+        if (!condition) {
+            throwError(this.tokenizer.envName, this.tokenizer.data, `Expected primary but found ${this.look.value}`, this.look.position);
+        }
+        this.consume(")");
+        const body = this.statement();
+        if (!body) {
+            throwError(this.tokenizer.envName, this.tokenizer.data, `Expected statement but found ${this.look.value}`, this.look.position);
+        }
+        ended = this.prev.position;
+        return ({
+            type: Ast.WHILE,
+            condition: condition,
+            body: body,
+            position: mergePos(start, ended)
+        });
+    }
+
+    blockStmnt() {
+        let start = this.look.position, ended = {};
+        this.consume("{");
+        const children = [];
+        let childN = this.statement();
+        while (childN) {
+            children.push(childN);
+            childN = this.statement();
+        }
+        this.consume("}");
+        ended = this.prev.position;
+        return ({
+            type: Ast.BLOCK,
+            children: children,
+            position: mergePos(start, ended)
+        });
+    }
+
+    contiueStmnt() {
+        let start = this.look.position, ended = {};
+        this.consume("continue");
+        this.consume(";");
+        ended = this.prev.position;
+        return ({
+            type: Ast.CONTINUE,
+            position: mergePos(start, ended)
+        });
+    }
+
+    breakStmnt() {
+        let start = this.look.position, ended = {};
+        this.consume("break");
+        this.consume(";");
+        ended = this.prev.position;
+        return ({
+            type: Ast.BREAK,
+            position: mergePos(start, ended)
+        });
     }
 
     program() {
