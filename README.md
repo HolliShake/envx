@@ -61,7 +61,7 @@ println(2 % 2, 4 + 1);
 println(2 == 2);
 ```
 
-### Example code: Javascript interpolation
+### Example code: Javascript interoperability
 ```js
 const { envx, runTest, envxCall } = require('dto-envx/src/app.js');
 
