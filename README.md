@@ -8,6 +8,22 @@
 - [ ] React support
 
 
+### How to use
+
+<span>vite.config.js</span>
+```js
+import { envxPluginVite } from 'dto-envx';
+
+// https://vitejs.dev/config/
+export default defineConfig({
+  plugins: [
+    vue(),
+    vueJsx(),
+    envxPluginVite()
+  ]
+});
+```
+
 ### Example code:
 
 <span>file: development.envx</span>
