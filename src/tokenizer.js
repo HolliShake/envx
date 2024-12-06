@@ -226,6 +226,7 @@ class Tokenizer {
             case ']':
             case '{':
             case '}':
+            case '.':
             case ',':
             case ':':
             case ';': {

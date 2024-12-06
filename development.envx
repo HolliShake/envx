@@ -75,6 +75,7 @@ fn getApiName(a,b,c) {
 const PRIVATE_HASH = "qsdad123q3";
 
 fn getHash() {
+    return PRIVATE_HASH;
 }
 
 
@@ -143,3 +144,13 @@ do {
     println(qq);
     qq += 1;
 } while(qq != 200)
+
+println(qq.isEven());
+
+println((2 + 2 + 1).isEven());
+
+println(">>", Number.add(3, 3) * 6);
+
+println("Hello".concat("_" + "World!"));
+
+println(Boolean);

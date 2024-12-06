@@ -63,6 +63,9 @@ class Visitor {
             case Ast.STRING:
                 this.astString(node);
                 break;
+            case Ast.ACCESS:
+                this.astAccess(node);
+                break;
             case Ast.CALL:
                 this.astCalll(node);
                 break;
@@ -282,14 +285,46 @@ class ByteComiler extends Visitor {
         ]);
     }
 
+    astAccess(node) { 
+        this.visit(node.object);
+
+        if (node.member.type != Ast.ID) {
+            throwError(this.parser.tokenizer.envName, this.parser.tokenizer.data, `Expected identifier but got ${node.member.type}`, node.member.position);
+        }
+
+        this.bytecode.push(...[
+            OPCODE.GET_ATTRIBUTE, 
+            ...sliceWord(node.member.value)
+        ]);
+    }
+
     astCalll(node) {
         const args = node.args.reverse();
         for (let i = 0; i < args.length; i++) {
             this.visit(args[i]);
         }
-        this.visit(node.object);
+
+        const isMethodCall = node.object.type == Ast.ACCESS;
+        if (isMethodCall) {
+            this.visit(node.object.object);
+            this.bytecode.push(OPCODE.DUP_TOP);
+
+            if (node.object.member.type != Ast.ID) {
+                throwError(this.parser.tokenizer.envName, this.parser.tokenizer.data, `Expected identifier but got ${node.object.member.type}`, node.member.position);
+            }
+
+            this.bytecode.push(...[
+                OPCODE.GET_ATTRIBUTE, 
+                ...sliceWord(node.object.member.value)
+            ]);
+        }
+        else {
+            this.visit(node.object);
+        }
+
+
         this.bytecode.push(...[
-            OPCODE.CALL_FUNCTION,
+            isMethodCall ? OPCODE.CALL_METHOD : OPCODE.CALL_FUNCTION,
             ...slice4Number(args.length)
         ]);
     }

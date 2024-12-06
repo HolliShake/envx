@@ -4,6 +4,7 @@ const ValueType  = Object.freeze({
     SCRIPT : "script",
     FN     : "fn",
     JSFN   : "jsfn",
+    TYPE   : "type",
     NUMBER : "number",
     STRING : "string",
     BOOL   : "bool",
@@ -32,62 +33,131 @@ class Value {
             case ValueType.ERROR:
                 return this.value;
             case ValueType.FN:
-                return `<function ${this.value.name}>`;
+                return `<function ${this.value.name} />`;
             case ValueType.JSFN:
-                return `<jsfunction ${this.value.name}>`;
+                return `<jsfunction ${this.value.name} />`;
+            case ValueType.TYPE:
+                return `<type @${this.value.name} />`;
             default:
                 return "unknown";
         }
     }
 }
 
-const CONSTRUCTOR_NUMBER = Object.freeze({
-    "name": ValueType.NUMBER,
-    "static.new": function(state, value) {
-        state.stack.push(new Value(CONSTRUCTOR_NUMBER, value));
-    }
-});
-
-const CONSTRUCTOR_STRING = Object.freeze({
-    "name": ValueType.STRING,
-    "static.new": function(state, value) {
-        state.stack.push(new Value(CONSTRUCTOR_STRING, value));
+const CONSTRUCTOR_FN = ({
+    "name": ValueType.FN,
+    "private.static.new": function(state, value) {
+        state.stack.push(new Value(CONSTRUCTOR_FN, value));
     }
 })
 
-const CONSTRUCTOR_BOOL = Object.freeze({
-    "name": ValueType.BOOL,
-    "static.new": function(state, value) {
-        state.stack.push(new Value(CONSTRUCTOR_BOOL, value));
-    }
-})
-
-const SINGLETON_NULL = new Value(null, null);
-const CONSTRUCTOR_NULL = Object.freeze({
-    "name": ValueType.NULL,
-    "static.new": function(state) {
-        state.stack.push(SINGLETON_NULL);
+const CONSTRUCTOR_JSFN = ({
+    "name": ValueType.JSFN,
+    "private.static.new": function(state, value) {
+        state.stack.push(new Value(CONSTRUCTOR_FN, value));
     }
 })
 
 const CONSTRUCTOR_ERROR = Object.freeze({
     "name": ValueType.ERROR,
-    "static.new": function(state, value) {
+    "private.static.new": function(state, value) {
         state.stack.push(new Value(CONSTRUCTOR_ERROR, value));
     }
 })
 
-const CONSTRUCTOR_FN = Object.freeze({
-    "name": ValueType.FN,
-    "static.new": function(state, value) {
-        state.stack.push(new Value(CONSTRUCTOR_FN, value));
+const CONSTRUCTOR_TYPE = ({
+    "name": ValueType.TYPE,
+})
+
+const CONSTRUCTOR_NUMBER = ({
+    "name": ValueType.NUMBER,
+    "private.static.new": function(state, value) {
+        state.stack.push(new Value(CONSTRUCTOR_NUMBER, value));
+    },
+    /****************/
+    "isEven": new Value(CONSTRUCTOR_JSFN, ({
+        name: "isEven",
+        args: 0,
+        code: function(state, ...args) {
+            CONSTRUCTOR_BOOL["private.static.new"](state, args[0].value % 2 == 0);
+        }
+    })),
+    /****************/ 
+    "static.mul": new Value(CONSTRUCTOR_JSFN, ({
+        name: "mul",
+        args: 2,
+        code: function(state, ...args) {
+            state.stack.push(args[1]);
+            state.stack.push(args[2]);
+            binMul(state);
+        }
+    })),
+    "static.div": new Value(CONSTRUCTOR_JSFN, ({
+        name: "div",
+        args: 2,
+        code: function(state, ...args) {
+            state.stack.push(args[1]);
+            state.stack.push(args[2]);
+            binDiv(state);
+        }
+    })),
+    "static.mod": new Value(CONSTRUCTOR_JSFN, ({
+        name: "mod",
+        args: 2,
+        code: function(state, ...args) {
+            state.stack.push(args[1]);
+            state.stack.push(args[2]);
+            binMod(state);
+        }
+    })),
+    "static.add": new Value(CONSTRUCTOR_JSFN, ({
+        name: "add",
+        args: 2,
+        code: function(state, ...args) {
+            state.stack.push(args[1]);
+            state.stack.push(args[2]);
+            binAdd(state);
+        }
+    })),
+    "static.sub": new Value(CONSTRUCTOR_JSFN, ({
+        name: "sub",
+        args: 2,
+        code: function(state, ...args) {
+            state.stack.push(args[1]);
+            state.stack.push(args[2]);
+            binSub(state);
+        }
+    })),
+});
+
+const CONSTRUCTOR_STRING = ({
+    "name": ValueType.STRING,
+    "private.static.new": function(state, value) {
+        state.stack.push(new Value(CONSTRUCTOR_STRING, value));
+    },
+    /****************/
+    "concat": new Value(CONSTRUCTOR_JSFN, ({
+        name: "concat",
+        args: 1,
+        code: function(state, ...args) {
+            state.stack.push(args[0]);
+            state.stack.push(args[1]);
+            binAdd(state);
+        }
+    })),
+})
+
+const CONSTRUCTOR_BOOL = ({
+    "name": ValueType.BOOL,
+    "private.static.new": function(state, value) {
+        state.stack.push(new Value(CONSTRUCTOR_BOOL, value));
     }
 })
 
-const CONSTRUCTOR_JSFN = Object.freeze({
-    "name": ValueType.JSFN,
-    "static.new": function(state, value) {
-        state.stack.push(new Value(CONSTRUCTOR_FN, value));
+const CONSTRUCTOR_NULL = Object.freeze({
+    "name": ValueType.NULL,
+    "private.static.new": function(state) {
+        state.stack.push(new Value(CONSTRUCTOR_NULL, null));
     }
 })
 
@@ -118,7 +188,7 @@ const jsObjToValue = (jsObj) => {
     } else if (typeof jsObj === "boolean") {
         return new Value(CONSTRUCTOR_BOOL, jsObj);
     } else {
-        return SINGLETON_NULL;
+        return new Value(CONSTRUCTOR_NULL, null);
     }
 }
 
@@ -159,42 +229,42 @@ const getGlobalScope = (scope) => {
 
 const logNot = (state) => {
     const a = state.stack.pop();
-    CONSTRUCTOR_BOOL["static.new"](state, !a.value);
+    CONSTRUCTOR_BOOL["private.static.new"](state, !a.value);
 }
 
 const bitNot = (state) => {
     const a = state.stack.pop();
     if (a.dtype.name == ValueType.NUMBER) {
-        CONSTRUCTOR_NUMBER["static.new"](state, ~a.value);
+        CONSTRUCTOR_NUMBER["private.static.new"](state, ~a.value);
     } else {
         // Allow fault tolerance
         // when operands are not compatible
         // at runtime
-        CONSTRUCTOR_ERROR["static.new"](state, `TypeError: unsupported operand type(s) for ~: '${a.dtype.name}'`);
+        CONSTRUCTOR_ERROR["private.static.new"](state, `TypeError: unsupported operand type(s) for ~: '${a.dtype.name}'`);
     }
 }
 
 const pos = (state) => {
     const a = state.stack.pop();
     if (a.dtype.name == ValueType.NUMBER) {
-        CONSTRUCTOR_NUMBER["static.new"](state, +a.value);
+        CONSTRUCTOR_NUMBER["private.static.new"](state, +a.value);
     } else {
         // Allow fault tolerance
         // when operands are not compatible
         // at runtime
-        CONSTRUCTOR_ERROR["static.new"](state, `TypeError: bad operand type for unary +: '${a.dtype.name}'`);
+        CONSTRUCTOR_ERROR["private.static.new"](state, `TypeError: bad operand type for unary +: '${a.dtype.name}'`);
     }
 }
 
 const neg = (state) => {
     const a = state.stack.pop();
     if (a.dtype.name == ValueType.NUMBER) {
-        CONSTRUCTOR_NUMBER["static.new"](state, -a.value);
+        CONSTRUCTOR_NUMBER["private.static.new"](state, -a.value);
     } else {
         // Allow fault tolerance
         // when operands are not compatible
         // at runtime
-        CONSTRUCTOR_ERROR["static.new"](state, `TypeError: bad operand type for unary -: '${a.dtype.name}'`);
+        CONSTRUCTOR_ERROR["private.static.new"](state, `TypeError: bad operand type for unary -: '${a.dtype.name}'`);
     }
 }
 
@@ -202,12 +272,12 @@ const binMul = (state) => {
     const b = state.stack.pop();
     const a = state.stack.pop();
     if (a.dtype.name == ValueType.NUMBER && b.dtype.name == ValueType.NUMBER) {
-        CONSTRUCTOR_NUMBER["static.new"](state, a.value * b.value);
+        CONSTRUCTOR_NUMBER["private.static.new"](state, a.value * b.value);
     } else {
         // Allow fault tolerance
         // when operands are not compatible
         // at runtime
-        CONSTRUCTOR_ERROR["static.new"](state, `TypeError: unsupported operand type(s) for -: '${a.dtype.name}' and '${b.dtype.name}'`);
+        CONSTRUCTOR_ERROR["private.static.new"](state, `TypeError: unsupported operand type(s) for -: '${a.dtype.name}' and '${b.dtype.name}'`);
     }
 }
 
@@ -215,12 +285,12 @@ const binDiv = (state) => {
     const b = state.stack.pop();
     const a = state.stack.pop();
     if (a.dtype.name == ValueType.NUMBER && b.dtype.name == ValueType.NUMBER) {
-        CONSTRUCTOR_NUMBER["static.new"](state, a.value / b.value);
+        CONSTRUCTOR_NUMBER["private.static.new"](state, a.value / b.value);
     } else {
         // Allow fault tolerance
         // when operands are not compatible
         // at runtime
-        CONSTRUCTOR_ERROR["static.new"](state, `TypeError: unsupported operand type(s) for -: '${a.dtype.name}' and '${b.dtype.name}'`);
+        CONSTRUCTOR_ERROR["private.static.new"](state, `TypeError: unsupported operand type(s) for -: '${a.dtype.name}' and '${b.dtype.name}'`);
     }
 }
 
@@ -228,12 +298,12 @@ const binMod = (state) => {
     const b = state.stack.pop();
     const a = state.stack.pop();
     if (a.dtype.name == ValueType.NUMBER && b.dtype.name == ValueType.NUMBER) {
-        CONSTRUCTOR_NUMBER["static.new"](state, a.value % b.value);
+        CONSTRUCTOR_NUMBER["private.static.new"](state, a.value % b.value);
     } else {
         // Allow fault tolerance
         // when operands are not compatible
         // at runtime
-        CONSTRUCTOR_ERROR["static.new"](state, `TypeError: unsupported operand type(s) for -: '${a.dtype.name}' and '${b.dtype.name}'`);
+        CONSTRUCTOR_ERROR["private.static.new"](state, `TypeError: unsupported operand type(s) for -: '${a.dtype.name}' and '${b.dtype.name}'`);
     }
 }
 
@@ -241,14 +311,14 @@ const binAdd = (state) => {
     const b = state.stack.pop();
     const a = state.stack.pop();
     if (a.dtype.name == ValueType.NUMBER && b.dtype.name == ValueType.NUMBER) {
-        CONSTRUCTOR_NUMBER["static.new"](state, a.value + b.value);
+        CONSTRUCTOR_NUMBER["private.static.new"](state, a.value + b.value);
     } else if (a.dtype.name == ValueType.STRING && b.dtype.name == ValueType.STRING) {
-        CONSTRUCTOR_STRING["static.new"](state, a.value + b.value);
+        CONSTRUCTOR_STRING["private.static.new"](state, a.value + b.value);
     } else {
         // Allow fault tolerance
         // when operands are not compatible
         // at runtime
-        CONSTRUCTOR_ERROR["static.new"](state, `TypeError: unsupported operand type(s) for +: '${a.dtype.name}' and '${b.dtype.name}'`);
+        CONSTRUCTOR_ERROR["private.static.new"](state, `TypeError: unsupported operand type(s) for +: '${a.dtype.name}' and '${b.dtype.name}'`);
     }
 }
 
@@ -256,12 +326,12 @@ const binSub = (state) => {
     const b = state.stack.pop();
     const a = state.stack.pop();
     if (a.dtype.name == ValueType.NUMBER && b.dtype.name == ValueType.NUMBER) {
-        CONSTRUCTOR_NUMBER["static.new"](state, a.value - b.value);
+        CONSTRUCTOR_NUMBER["private.static.new"](state, a.value - b.value);
     } else {
         // Allow fault tolerance
         // when operands are not compatible
         // at runtime
-        CONSTRUCTOR_ERROR["static.new"](state, `TypeError: unsupported operand type(s) for -: '${a.dtype.name}' and '${b.dtype.name}'`);
+        CONSTRUCTOR_ERROR["private.static.new"](state, `TypeError: unsupported operand type(s) for -: '${a.dtype.name}' and '${b.dtype.name}'`);
     }
 }
 
@@ -269,12 +339,12 @@ const binShl = (state) => {
     const b = state.stack.pop();
     const a = state.stack.pop();
     if (a.dtype.name == ValueType.NUMBER && b.dtype.name == ValueType.NUMBER) {
-        CONSTRUCTOR_NUMBER["static.new"](state, a.value << b.value);
+        CONSTRUCTOR_NUMBER["private.static.new"](state, a.value << b.value);
     } else {
         // Allow fault tolerance
         // when operands are not compatible
         // at runtime
-        CONSTRUCTOR_ERROR["static.new"](state, `TypeError: unsupported operand type(s) for -: '${a.dtype.name}' and '${b.dtype.name}'`);
+        CONSTRUCTOR_ERROR["private.static.new"](state, `TypeError: unsupported operand type(s) for -: '${a.dtype.name}' and '${b.dtype.name}'`);
     }
 }
 
@@ -282,12 +352,12 @@ const binShr = (state) => {
     const b = state.stack.pop();
     const a = state.stack.pop();
     if (a.dtype.name == ValueType.NUMBER && b.dtype.name == ValueType.NUMBER) {
-        CONSTRUCTOR_NUMBER["static.new"](state, a.value >> b.value);
+        CONSTRUCTOR_NUMBER["private.static.new"](state, a.value >> b.value);
     } else {
         // Allow fault tolerance
         // when operands are not compatible
         // at runtime
-        CONSTRUCTOR_ERROR["static.new"](state, `TypeError: unsupported operand type(s) for -: '${a.dtype.name}' and '${b.dtype.name}'`);
+        CONSTRUCTOR_ERROR["private.static.new"](state, `TypeError: unsupported operand type(s) for -: '${a.dtype.name}' and '${b.dtype.name}'`);
     }
 }
 
@@ -295,12 +365,12 @@ const binLt = (state) => {
     const b = state.stack.pop();
     const a = state.stack.pop();
     if (a.dtype.name == ValueType.NUMBER && b.dtype.name == ValueType.NUMBER) {
-        CONSTRUCTOR_BOOL["static.new"](state, a.value < b.value);
+        CONSTRUCTOR_BOOL["private.static.new"](state, a.value < b.value);
     } else {
         // Allow fault tolerance
         // when operands are not compatible
         // at runtime
-        CONSTRUCTOR_ERROR["static.new"](state, `TypeError: unsupported operand type(s) for >: '${a.dtype.name}' and '${b.dtype.name}'`);
+        CONSTRUCTOR_ERROR["private.static.new"](state, `TypeError: unsupported operand type(s) for >: '${a.dtype.name}' and '${b.dtype.name}'`);
     }
 }
 
@@ -308,12 +378,12 @@ const binLe = (state) => {
     const b = state.stack.pop();
     const a = state.stack.pop();
     if (a.dtype.name == ValueType.NUMBER && b.dtype.name == ValueType.NUMBER) {
-        CONSTRUCTOR_BOOL["static.new"](state, a.value <= b.value);
+        CONSTRUCTOR_BOOL["private.static.new"](state, a.value <= b.value);
     } else {
         // Allow fault tolerance
         // when operands are not compatible
         // at runtime
-        CONSTRUCTOR_ERROR["static.new"](state, `TypeError: unsupported operand type(s) for >: '${a.dtype.name}' and '${b.dtype.name}'`);
+        CONSTRUCTOR_ERROR["private.static.new"](state, `TypeError: unsupported operand type(s) for >: '${a.dtype.name}' and '${b.dtype.name}'`);
     }
 }
 
@@ -321,12 +391,12 @@ const binGt = (state) => {
     const b = state.stack.pop();
     const a = state.stack.pop();
     if (a.dtype.name == ValueType.NUMBER && b.dtype.name == ValueType.NUMBER) {
-        CONSTRUCTOR_BOOL["static.new"](state, a.value > b.value);
+        CONSTRUCTOR_BOOL["private.static.new"](state, a.value > b.value);
     } else {
         // Allow fault tolerance
         // when operands are not compatible
         // at runtime
-        CONSTRUCTOR_ERROR["static.new"](state, `TypeError: unsupported operand type(s) for >: '${a.dtype.name}' and '${b.dtype.name}'`);
+        CONSTRUCTOR_ERROR["private.static.new"](state, `TypeError: unsupported operand type(s) for >: '${a.dtype.name}' and '${b.dtype.name}'`);
     }
 }
 
@@ -334,37 +404,37 @@ const binGe = (state) => {
     const b = state.stack.pop();
     const a = state.stack.pop();
     if (a.dtype.name == ValueType.NUMBER && b.dtype.name == ValueType.NUMBER) {
-        CONSTRUCTOR_BOOL["static.new"](state, a.value >= b.value);
+        CONSTRUCTOR_BOOL["private.static.new"](state, a.value >= b.value);
     } else {
         // Allow fault tolerance
         // when operands are not compatible
         // at runtime
-        CONSTRUCTOR_ERROR["static.new"](state, `TypeError: unsupported operand type(s) for >: '${a.dtype.name}' and '${b.dtype.name}'`);
+        CONSTRUCTOR_ERROR["private.static.new"](state, `TypeError: unsupported operand type(s) for >: '${a.dtype.name}' and '${b.dtype.name}'`);
     }
 }
 
 const binEq = (state) => {
     const b = state.stack.pop();
     const a = state.stack.pop();
-    CONSTRUCTOR_BOOL["static.new"](state, a.value === b.value);
+    CONSTRUCTOR_BOOL["private.static.new"](state, a.value === b.value);
 }
 
 const binNe = (state) => {
     const b = state.stack.pop();
     const a = state.stack.pop();
-    CONSTRUCTOR_BOOL["static.new"](state, a.value !== b.value);
+    CONSTRUCTOR_BOOL["private.static.new"](state, a.value !== b.value);
 }
 
 const binAnd = (state) => {
     const b = state.stack.pop();
     const a = state.stack.pop();
     if (a.dtype.name == ValueType.NUMBER && b.dtype.name == ValueType.NUMBER) {
-        CONSTRUCTOR_NUMBER["static.new"](state, a.value & b.value);
+        CONSTRUCTOR_NUMBER["private.static.new"](state, a.value & b.value);
     } else {
         // Allow fault tolerance
         // when operands are not compatible
         // at runtime
-        CONSTRUCTOR_ERROR["static.new"](state, `TypeError: unsupported operand type(s) for &: '${a.dtype.name}' and '${b.dtype.name}'`);
+        CONSTRUCTOR_ERROR["private.static.new"](state, `TypeError: unsupported operand type(s) for &: '${a.dtype.name}' and '${b.dtype.name}'`);
     }
 }
 
@@ -372,12 +442,12 @@ const binOr = (state) => {
     const b = state.stack.pop();
     const a = state.stack.pop();
     if (a.dtype.name == ValueType.NUMBER && b.dtype.name == ValueType.NUMBER) {
-        CONSTRUCTOR_NUMBER["static.new"](state, a.value | b.value);
+        CONSTRUCTOR_NUMBER["private.static.new"](state, a.value | b.value);
     } else {
         // Allow fault tolerance
         // when operands are not compatible
         // at runtime
-        CONSTRUCTOR_ERROR["static.new"](state, `TypeError: unsupported operand type(s) for |: '${a.dtype.name}' and '${b.dtype.name}'`);
+        CONSTRUCTOR_ERROR["private.static.new"](state, `TypeError: unsupported operand type(s) for |: '${a.dtype.name}' and '${b.dtype.name}'`);
     }
 }
 
@@ -385,12 +455,12 @@ const binXor = (state) => {
     const b = state.stack.pop();
     const a = state.stack.pop();
     if (a.dtype.name == ValueType.NUMBER && b.dtype.name == ValueType.NUMBER) {
-        CONSTRUCTOR_NUMBER["static.new"](state, a.value ^ b.value);
+        CONSTRUCTOR_NUMBER["private.static.new"](state, a.value ^ b.value);
     } else {
         // Allow fault tolerance
         // when operands are not compatible
         // at runtime
-        CONSTRUCTOR_ERROR["static.new"](state, `TypeError: unsupported operand type(s) for ^: '${a.dtype.name}' and '${b.dtype.name}'`);
+        CONSTRUCTOR_ERROR["private.static.new"](state, `TypeError: unsupported operand type(s) for ^: '${a.dtype.name}' and '${b.dtype.name}'`);
     }
 }
 
@@ -407,20 +477,26 @@ function callScript(state, valueOfTypeScript) {
     return current;
 }
 
-function callFn(state, valueOfTypeOfFn) {
+function callFn(state, valueOfTypeOfFn, isMethod = false) {
     // Save current scope
     state.env.push(state.scope);
     const current = state.scope = {
         "$": state.scope //parent
     };
+    if (isMethod) {
+        current['this'] = state.stack.pop();
+    }
     execute(state, valueOfTypeOfFn);
     // Restore scope
     state.scope = state.env.pop();
     return current;
 }
 
-function callJsFn(state, valueOfTypeJsfFn, argc) {
+function callJsFn(state, valueOfTypeJsfFn, argc, isMethod = false) {
     const args = [];
+    if (isMethod) {
+        args.push(state.stack.pop());
+    }
     for (let i = 0; i < argc; i++) {
         args.push(state.stack.pop());
     }
@@ -436,7 +512,7 @@ function execute(state, valueOfTypeScriptOrFn) {
         switch (opcode) {
             case OPCODE.LOAD_NUMBER: {
                 const num = getNumber(pc + 1, code);
-                CONSTRUCTOR_NUMBER["static.new"](state, num);
+                CONSTRUCTOR_NUMBER["private.static.new"](state, num);
                 // 8 bytes + next
                 pc += 9;
                 break;
@@ -448,13 +524,13 @@ function execute(state, valueOfTypeScriptOrFn) {
                     str += String.fromCharCode(code[index]);
                     index++;
                 }
-                CONSTRUCTOR_STRING["static.new"](state, str);
+                CONSTRUCTOR_STRING["private.static.new"](state, str);
                 // (str + 1nullchr) + next
                 pc += str.length + 1 + 1;
                 break;
             }
             case OPCODE.LOAD_NULL: {
-                CONSTRUCTOR_NULL["static.new"](state);
+                CONSTRUCTOR_NULL["private.static.new"](state);
                 // next
                 pc += 1;
                 break;
@@ -475,7 +551,40 @@ function execute(state, valueOfTypeScriptOrFn) {
                 if (value) {
                     state.stack.push(value);
                 } else {
-                    CONSTRUCTOR_ERROR["static.new"](state, `NameError: name '${name}' is not defined`);
+                    CONSTRUCTOR_ERROR["private.static.new"](state, `NameError: name '${name}' is not defined`);
+                }
+
+                // (name + 1nullchr) + next
+                pc += name.length + 1 + 1;
+                break;
+            }
+            case OPCODE.GET_ATTRIBUTE: {
+                let index = pc + 1;
+                let name = ""
+                while (code[index] != 0) {
+                    name += String.fromCharCode(code[index]);
+                    index++;
+                }
+
+                const obj = state.stack.pop();
+                let attr = null;
+
+                if (obj.dtype.name == ValueType.TYPE) {
+                    // Get static attribute
+                    attr  = obj.value[`static.${name}`];
+                } else {
+                    // Get static attribute
+                    attr  = obj.dtype[name];
+                }
+
+                if (attr) {
+                    state.stack.push(attr);
+                }
+                else {
+                    // Allow fault tolerance
+                    // when attribute is not found
+                    // at runtime
+                    CONSTRUCTOR_ERROR["private.static.new"](state, `AttributeError: '${obj.dtype.name}' object has no attribute '${name}'`);
                 }
 
                 // (name + 1nullchr) + next
@@ -483,7 +592,6 @@ function execute(state, valueOfTypeScriptOrFn) {
                 break;
             }
             case OPCODE.CALL_FUNCTION: {
-                
                 const args = get4Number(pc + 1, code);
 
                 const fn = state.stack.pop();
@@ -495,7 +603,7 @@ function execute(state, valueOfTypeScriptOrFn) {
 
                     /**** pop args **/
                     for (let i = 0; i < args; i++) state.stack.pop();
-                    CONSTRUCTOR_ERROR["static.new"](state, `TypeError: ${fn.dtype.name} is not callable`);
+                    CONSTRUCTOR_ERROR["private.static.new"](state, `TypeError: ${fn.dtype.name} is not callable`);
                     pc += 4 + 1;
                     break;
                 }
@@ -508,15 +616,60 @@ function execute(state, valueOfTypeScriptOrFn) {
 
                     /**** pop args **/
                     for (let i = 0; i < args; i++) state.stack.pop();
-                    CONSTRUCTOR_ERROR["static.new"](state, `TypeError: ${fn.value.name}() takes ${fn.value.args} arguments but ${args} were given`);
+                    CONSTRUCTOR_ERROR["private.static.new"](state, `TypeError: ${fn.value.name}() takes ${fn.value.args} arguments but ${args} were given`);
                     pc += 4 + 1;
                     break;
                 }
 
                 if (fn.dtype.name == ValueType.FN)
-                    callFn(state, fn);
+                    callFn(state, fn, false);
                 else
-                    callJsFn(state, fn, args);
+                    callJsFn(state, fn, args, false);
+
+                // 4 bytes for argc + next
+                pc += 4 + 1;
+                break;
+            }
+            case OPCODE.CALL_METHOD: {
+                const args = get4Number(pc + 1, code);
+
+                const fn = state.stack.pop();
+                
+                if (fn.dtype.name != ValueType.FN && fn.dtype.name != ValueType.JSFN) {
+                    /**** Pop thisArg **/
+                    state.stack.pop();
+
+                    // Allow fault tolerance
+                    // when object is not callable
+                    // at runtime
+
+                    /**** pop args **/
+                    for (let i = 0; i < args; i++) state.stack.pop();
+                    CONSTRUCTOR_ERROR["private.static.new"](state, `TypeError: ${fn.dtype.name} is not callable`);
+                    pc += 4 + 1;
+                    break;
+                }
+
+                if (fn.value.args != -1 && fn.value.args != args) {
+                    /**** Pop thisArg **/
+                    state.stack.pop();
+
+                    // Allow fault tolerance
+                    // when number of arguments
+                    // does not match
+                    // at runtime
+
+                    /**** pop args **/
+                    for (let i = 0; i < args; i++) state.stack.pop();
+                    CONSTRUCTOR_ERROR["private.static.new"](state, `TypeError: ${fn.value.name}() takes ${fn.value.args} arguments but ${args} were given`);
+                    pc += 4 + 1;
+                    break;
+                }
+
+                if (fn.dtype.name == ValueType.FN)
+                    callFn(state, fn, true);
+                else
+                    callJsFn(state, fn, args, true);
 
                 // 4 bytes for argc + next
                 pc += 4 + 1;
@@ -676,7 +829,7 @@ function execute(state, valueOfTypeScriptOrFn) {
                 const ended = begin + bodySize;
                 const body  = code.slice(begin, ended);
             
-                CONSTRUCTOR_FN["static.new"](state, ({
+                CONSTRUCTOR_FN["private.static.new"](state, ({
                     name: name,
                     args: argc,
                     code: body
@@ -728,9 +881,27 @@ function load(state) {
             args: -1,
             code: function (state, ...args) {
                 console.log(...args.map((a) => a.toString()))
-                CONSTRUCTOR_NULL["static.new"](state);
+                CONSTRUCTOR_NULL["private.static.new"](state);
             }
         }));
+    
+    state.scope["Fn"]
+        = new Value(CONSTRUCTOR_TYPE, CONSTRUCTOR_FN);
+    
+    state.scope["JsFn"]
+        = new Value(CONSTRUCTOR_TYPE, CONSTRUCTOR_JSFN);
+
+    state.scope["Number"]
+        = new Value(CONSTRUCTOR_TYPE, CONSTRUCTOR_NUMBER);
+    
+    state.scope["String"]
+        = new Value(CONSTRUCTOR_TYPE, CONSTRUCTOR_STRING);
+    
+    state.scope["Boolean"]
+        = new Value(CONSTRUCTOR_TYPE, CONSTRUCTOR_BOOL);
+    
+    state.scope["Error"]
+        = new Value(CONSTRUCTOR_TYPE, CONSTRUCTOR_ERROR);
 }
 
 const ENVXGLOBAL = ({});
@@ -788,7 +959,7 @@ function envxCall(variableName, ...args) {
         // when object is not callable
         // at runtime
 
-        CONSTRUCTOR_ERROR["static.new"](STATE, `TypeError: ${fn.dtype.name} is not callable`);
+        CONSTRUCTOR_ERROR["private.static.new"](STATE, `TypeError: ${fn.dtype.name} is not callable`);
         return valueToJsObj(STATE.stack.pop());
     }
 
@@ -798,7 +969,7 @@ function envxCall(variableName, ...args) {
         // does not match
         // at runtime
 
-        CONSTRUCTOR_ERROR["static.new"](STATE, `TypeError: ${fn.value.name}() takes ${fn.value.args} arguments but ${args.length} were given`);
+        CONSTRUCTOR_ERROR["private.static.new"](STATE, `TypeError: ${fn.value.name}() takes ${fn.value.args} arguments but ${args.length} were given`);
         return valueToJsObj(STATE.stack.pop());
     }
     
@@ -807,11 +978,11 @@ function envxCall(variableName, ...args) {
 
     switch (fn.dtype.name) {
         case ValueType.FN:
-            callFn(STATE, fn);
+            callFn(STATE, fn, false);
             STATE.scope = STATE.env.pop();
             return valueToJsObj(STATE.stack.pop());
         case ValueType.JSFN:
-            callJsFn(STATE, fn, args.length);
+            callJsFn(STATE, fn, args.length, false);
             return valueToJsObj(STATE.stack.pop());
         default:
             return null;

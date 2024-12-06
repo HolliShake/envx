@@ -8,6 +8,7 @@ const Ast = Object.freeze({
     STRING  : "STRING",
     BOOL    : "BOOL",
     NULL    : "NULL",
+    ARRAY   : "ARRAY",
     ACCESS  : "ACCESS",
     CALL    : "CALL",
     INDEX   : "INDEX",
@@ -144,15 +145,50 @@ class Parser {
         return null;
     }
 
+    group() {
+        if (this.check("(")) {
+            this.consume("(");
+            const node = this.mandatory();
+            this.consume(")");
+            return node;
+        }
+        else if (this.check("[")) {
+            let start = this.look.position, ended = {};
+            this.consume("[");
+            const elements = [];
+            let element = this.primary();
+            if (element) {
+                elements.push(element);
+                while (this.check(",")) {
+                    this.consume(",");
+                    element = this.primary();
+                    if (!element) {
+                        throwError(this.tokenizer.envName, this.tokenizer.data, `Expected primary but found ${this.look.value}`, this.look.position);
+                    }
+                    elements.push(element);
+                }
+            }
+            this.consume("]");
+            ended = this.prev.position;
+            return ({
+                type: Ast.ARRAY,
+                elements: elements,
+                position: mergePos(start, ended)
+            });
+        }
+        return this.terminal();
+    }
+
     memberOrCall() {
-        let node = this.terminal();
+        let node = this.group();
         if (!node) {
             return node;
         }
-
+        
         while (this.check(".") || this.check("(") || this.check("[")) {
             if (this.check(".")) {
                 this.consume(".");
+                
                 const member = this.terminal();
                 if (!member) {
                     throwError(this.tokenizer.envName, this.tokenizer.data, `Expected terminal but found ${this.look.value}`, this.look.position);
@@ -206,13 +242,7 @@ class Parser {
     }
 
     unary() {
-        if (this.check("(")) {
-            this.consume("(");
-            const node = this.mandatory();
-            this.consume(")");
-            return node;
-        }
-        else if (this.check("!") || this.check("~") || this.check("-") || this.check("+")) {
+        if (this.check("!") || this.check("~") || this.check("-") || this.check("+")) {
             const op = this.look.value;
             this.consume(this.look.value);
             const node = this.unary();
@@ -755,6 +785,7 @@ class Parser {
             }
         }
         this.consume(";");
+        ended = this.prev.position;
         return ({
             type: Ast.VAR,
             declarations: declarations,
@@ -804,6 +835,7 @@ class Parser {
             }
         }
         this.consume(";");
+        ended = this.prev.position;
         return ({
             type: Ast.CONST,
             declarations: declarations,
@@ -853,6 +885,7 @@ class Parser {
             }
         }
         this.consume(";");
+        ended = this.prev.position;
         return ({
             type: Ast.LOCAL,
             declarations: declarations,
