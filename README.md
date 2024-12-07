@@ -7,6 +7,22 @@
 - [x] Vite support
 - [ ] Webpack support
 
+### Modes
+- [x] production
+- [x] staging
+- [x] preview
+- [x] development   
+
+### File format
+#### mode + .envx = mode.envx
+#### example:
+#####  development.envx
+
+### Libraries tested
+- [x] vue 3+  JS/TS (vite)
+- [x] React   JS/TS (vite)
+- [x] Svelte  JS/TS (vite)
+
 ### Features
 - [x] if/else statement
 - [ ] switch statement and expression
