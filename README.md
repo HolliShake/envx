@@ -1,7 +1,7 @@
 
 # DTO-ENVX
 
-## A dynamic environment variable evaluator with a custom language and vm.
+## A dynamic environment variable evaluator that compiles to bytecode (simple array of bytes or not 😄) with a custom language and vm.
 
 ### Support
 - [x] Vite support
