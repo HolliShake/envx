@@ -32,7 +32,7 @@ function envxPluginVite(options = {}) {
     return {
         name: 'envx-vite-plugin', // required, will show up in warnings and errors
         apply(config, { command }) {
-            return command == 'build' || command == 'serve' && !config.build.ssr;
+            return command == 'build' || command == 'serve' && !config.build?.ssr;
         },
         resolveId(id) {
             if (id === virtualModuleId) {
