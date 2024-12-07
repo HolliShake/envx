@@ -1,7 +1,7 @@
-const { Parser } = require('./parser.js');
-const { ByteComiler } = require('./bytecompiler.js');
-const { getBuildEnvironment, readEnvContent } = require('./util.js');
-const { runBytecode, envx, envxCall } = require('./runtime.js');
+const { Parser } = require('./src/parser.js');
+const { ByteComiler } = require('./src/bytecompiler.js');
+const { getBuildEnvironment, readEnvContent } = require('./src/util.js');
+const { runBytecode, envx, envxCall } = require('./src/runtime.js');
 
 const runBuild = () => {
     const envFile = getBuildEnvironment() + '.envx';

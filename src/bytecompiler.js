@@ -48,10 +48,6 @@ const sliceWord = (word) => [
 ]
 
 class Visitor {
-    constructor() {
-
-    }
-
     visit(node) {
         switch (node.type) {
             case Ast.ID:

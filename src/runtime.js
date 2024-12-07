@@ -1055,6 +1055,7 @@ function runBytecode(arrayOfBytes) {
         const key = keys0[i];
         ENVXGLOBAL[key] = env[key];
     }
+    return STATE.stack.pop();
 }
 
 // API
@@ -1099,8 +1100,8 @@ function envxCall(variableName, ...args) {
         return valueToJsObj(STATE.stack.pop());
     }
     
-    const arguments = [...args].reverse().map((jsObj) => jsObjToValue(jsObj));
-    STATE.stack.push(...arguments);
+    const fnArgs = [...args].reverse().map((jsObj) => jsObjToValue(jsObj));
+    STATE.stack.push(...fnArgs);
 
     switch (fn.dtype.name) {
         case ValueType.FN:
@@ -1120,4 +1121,3 @@ module.exports = {
     envx,
     envxCall
 }
-
