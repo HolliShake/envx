@@ -9,13 +9,18 @@ const Ast = Object.freeze({
     BOOL    : "BOOL",
     NULL    : "NULL",
     ARRAY   : "ARRAY",
+    OBJECT  : "OBJECT",
     ACCESS  : "ACCESS",
     CALL    : "CALL",
     INDEX   : "INDEX",
+    PLUS2_POSTFIX   : "PLUS2_POSTFIX",
+    MINUS2_POSTFIX  : "MINUS2_POSTFIX",
     LNOT    : "LNOT",
     BNOT    : "BNOT",
     POS     : "POS",
     NEG     : "NEG",
+    PLUS2_PREFIX   : "PLUS2_PREFIX",
+    MINUS2_PREFIX  : "MINUS2_PREFIX",
     BIN_MUL : "BIN_MUL",
     BIN_DIV : "BIN_DIV",
     BIN_MOD : "BIN_MOD",
@@ -45,6 +50,7 @@ const Ast = Object.freeze({
     BIN_AND_ASS: "BIN_AND_ASS",
     BIN_OR_ASS: "BIN_OR_ASS",
     BIN_XOR_ASS: "BIN_XOR_ASS",
+    TERNARY: "TERNARY",
     EXPR_STMNT: "EXPR_STMNT",
     EMPTY   : "EMPTY",
     VAR     : "VAR",
@@ -77,9 +83,10 @@ class Parser {
     }
 
     check(token) {
-        if (token.constructor.name == "String" && this.look.type == TokenType.SYMBOL || this.look.type == TokenType.KEYWORD) {
+        const isTokenType = Object.values(TokenType).includes(token);
+        if (token.constructor.name == "String" && this.look.type == TokenType.SYMBOL || this.look.type == TokenType.KEYWORD && !isTokenType) {
             return this.look.value == token;
-        } else if (token.constructor.name == "String") {
+        } else if (token.constructor.name == "String" && isTokenType) {
             return token == this.look.type || token == this.look.value;
         }
        return false;
@@ -175,6 +182,34 @@ class Parser {
                 elements: elements,
                 position: mergePos(start, ended)
             });
+        } else if (this.check("{")) {
+            let start = this.look.position, ended = {};
+            this.consume("{");
+            const properties = []; // [{key:? val:?},...]
+            let key = this.primary();
+            let val = null;
+            if (key) {
+                this.consume(":");
+                val = this.mandatory();
+                properties.push({ key: key, val: val });
+                while (this.check(",")) {
+                    this.consume(",");
+                    key = this.primary();
+                    if (!key) {
+                        throwError(this.tokenizer.envName, this.tokenizer.data, `Expected primary but found ${this.look.value}`, this.look.position);
+                    }
+                    this.consume(":");
+                    val = this.mandatory();
+                    properties.push({ key: key, val: val });
+                }
+            }
+            this.consume("}");
+            ended = this.prev.position;
+            return ({
+                type: Ast.OBJECT,
+                properties: properties,
+                position: mergePos(start, ended)
+            });
         }
         return this.terminal();
     }
@@ -237,7 +272,30 @@ class Parser {
                 });
             }
         }
+        return node;
+    }
 
+    postfix() {
+        let node = this.memberOrCall();
+        if (!node) {
+            return node;
+        }
+        if (this.check("++")) {
+            this.consume("++");
+            return ({
+                type: Ast.PLUS2_POSTFIX,
+                left: node,
+                position: mergePos(node.position, this.prev.position)
+            });
+        }
+        else if (this.check("--")) {
+            this.consume("--");
+            return ({
+                type: Ast.MINUS2_POSTFIX,
+                left: node,
+                position: mergePos(node.position, this.prev.position)
+            });
+        }
         return node;
     }
 
@@ -269,7 +327,31 @@ class Parser {
                 position: mergePos(this.prev.position, node.position)
             });
         }
-        return this.memberOrCall();
+        else if (this.check("++")) {
+            this.consume("++");
+            const node = this.unary();
+            if (!node) {
+                throwError(this.tokenizer.envName, this.tokenizer.data, `Expected unary but found ${this.look.value}`, this.look.position);
+            }
+            return ({
+                type: Ast.PLUS2_PREFIX,
+                right: node,
+                position: mergePos(this.prev.position, node.position)
+            });
+        }
+        else if (this.check("--")) {
+            this.consume("--");
+            const node = this.unary();
+            if (!node) {
+                throwError(this.tokenizer.envName, this.tokenizer.data, `Expected unary but found ${this.look.value}`, this.look.position);
+            }
+            return ({
+                type: Ast.MINUS2_PREFIX,
+                right: node,
+                position: mergePos(this.prev.position, node.position)
+            });
+        }
+        return this.postfix();
     }
 
     mul() {
@@ -656,8 +738,33 @@ class Parser {
         return node;
     }
 
+    ternary() {
+        let node = this.augmentedBitAssign();
+        if (!node) {
+            return node;
+        }
+
+        if (this.check("?")) {
+            this.consume("?");
+            const trueVal = this.primary();
+            if (!trueVal) {
+                throwError(this.tokenizer.envName, this.tokenizer.data, `Expected true value but found ${this.look.value}`, this.look.position);
+            }
+            this.consume(":")
+            const falseVal = this.primary();
+            node = ({
+                type: Ast.TERNARY,
+                condition: node,
+                trueVal: trueVal,
+                falseVal: falseVal,
+                position: mergePos(node.position, this.prev.position)
+            });
+        }
+        return node;
+    }
+
     primary() {
-        return this.augmentedBitAssign();
+        return this.ternary();
     }
 
     mandatory() {

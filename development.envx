@@ -1,177 +1,41 @@
 
+Number.initial = 2;
 
-var REACT_APP_API_URL="https://public-domain.com/api";
-
-const KKL = REACT_APP_API_URL + "<<" + ">>";
-
-println(KKL);
-
-fn fact(n) {
-    if (n <= 1) 
-        return 1;
-    return n * fact(n - 1);
-}
-
-fn add(a, b) {
-    return a + b;
-}
-
-println(add(50, 2));
-
-println("\"Hello" + " " + "World!!!\"");
-
-const x = 2 + "asd";
-
-println(x);
-
-println(fact(
-    100
-));
-
-println(":>>", REACT_APP_API_URL);
-
-fn bark() {
-    local sound = "ArF!!";
-    println(">>", sound, REACT_APP_API_URL);
-}
-
-var h = bark();
-println(h);
-
-println(">>:", fact(5));
-
-2 / 1;
-
-println(2 % 2, 4 + 1);
-
-2 << 2;
-
-println(2 == 2);
-
-
-fn initH() {
-    h = 100 + 20;
-    h += 100;
-    println(">>>>>>>>>", h);
-}
-
-println("before >>", h);
-initH();
-println("after >>", h);
-
-
-fn jsCallTest(a, b) {
-    const x = "Hola!";
-    println(">>", x);
-    return a << b;
-}
-
-const REACT_API_URL = "https://optimumhr-api.ustp.edu.ph/api";
-
-fn getApiName(a,b,c) {
-    return REACT_API_URL;
-}
-
-const PRIVATE_HASH = "qsdad123q3";
-
-fn getHash() {
-    return PRIVATE_HASH;
-}
-
-h1 = 2;
-println(h1 -= 1);
-
-var y = 10;
-
-y *= 2;
-println("y :=", y);
-
-y /= 2;
-println("y :=", y);
-
-y %= 2;
-println("y :=", y);
-
-y += 10;
-println("y :=", y);
-
-y -= 5;
-println("y :=", y); 
-
-y <<= 1;
-println("y :=", y);
-
-y >>= 1;
-println("y :=", y);
-
-y &= 1;
-println("y :=", y);
-
-y |= 1;
-println("y :=", y);
-
-y ^= 1;
-println("y :=", y);
-
-println(!2);
-
-var i = 0;
-
-while (i < 5) {
-    println("i :=", i);
-    i += 1;
-}
-
-println(0xff);
-
-do {
-    println("i :=", i);
-    i -= 1;
-} while (i > 0)
-
-var qq = 0;
-
-do {
-    if (qq == 2) {
-        qq += 1;
-        continue;
-    }
-    if (qq >= 5) {
-        {
-            break;
-        }
-    }
-    println(qq);
-    qq += 1;
-} while(qq != 200)
-
-println(qq.isEven());
-
-println((2 + 2 + 1).isEven());
-
-println(">>", Number.add(3, 3) * 6);
-
-println("Hello".concat("_" + "World!"));
-
-println(Boolean);
-
-fn isOdd() {
-    return this % 2 != 0;
-}
-
-Number.isOdd = isOdd;
-
-
-println((101).isOdd());
+var x = 2;
 
 const arr = [1,2,3];
 
-arr.push(4);
-arr.push(5);
+println(arr[1]);
 
-println(arr, arr.peek(), arr.length());
+arr[1] += 69420;
 
-fn printArray(arr) {
-    println(arr);
-    return arr.toString();
+arr[1]++;
+
+++arr[1];
+
+println(arr);
+
+const y = (x += 2) + 2 * 2 - (50 / 2) + (++x) + (arr[1]++) + (x -= 3) * ++Number.initial + (Number.initial *= 2);
+
+println(y, x, arr);
+
+var index = 0;
+
+while (index < 3) {
+    println("index :=", index++);
 }
+
+(3 < 2)? println("Yes!!") : println("No");
+
+println(1 && false);
+
+fn getName() {
+    return this.name;
+}
+
+const obj = ({
+    "name": "Doy2",
+    "getName": getName
+});
+
+println(obj, obj.getName());

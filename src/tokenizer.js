@@ -149,6 +149,14 @@ class Tokenizer {
                         this.forward();
                     }
             }
+
+            if (token != "0") {
+                return ({
+                    type: TokenType.NUMBER,
+                    value: Number(token).toString(),
+                    position: pos
+                });
+            }
         }
         if (this.look == '.') {
             token += this.look;
@@ -227,6 +235,7 @@ class Tokenizer {
             case '{':
             case '}':
             case '.':
+            case '?':
             case ',':
             case ':':
             case ';': {

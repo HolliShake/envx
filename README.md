@@ -32,13 +32,14 @@
 - [x] string
 - [x] boolean
 - [x] null
+- [x] ternary
 - [ ] undefined
 - [x] array
 - [x] method call
 - [x] function call
 - [x] attribute access
-- [ ] index
-- [ ] object/hashmap
+- [x] index
+- [x] object/hashmap
 - [x] while loop
 - [x] do-while loop
 - [ ] for loop
@@ -68,7 +69,7 @@ import { envx, envxCall } from 'env:dto-envx'; // import 'env:dto-envx' instead 
 envx("SOME_VARIABLE_DEFINED_INSIDE_ENV_FILE");
 
 // Call function inside env file
-envxCall("someFunctionDefine", "arg0", "arg1");
+envxCall("functionDefined", "arg0", "arg1");
 ```
 
 ### Example code:

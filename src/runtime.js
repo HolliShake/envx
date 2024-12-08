@@ -37,6 +37,17 @@ class Value {
                 let str = "[" + this.value.map((v) => (this == v) ? "[self]" : v.toString()).join(", ") + "]";
                 return str;
             }
+            case ValueType.OBJECT: {
+                let str = "{ ";
+                for (const [key, value] of Object.entries(this.value)) {
+                    str += `${key}: ${(value == this) ? "[self]" : value.toString()}`;
+                    if (key != Object.keys(this.value)[Object.keys(this.value).length - 1]) {
+                        str += ", ";
+                    }
+                }
+                str += " }";
+                return str;
+            }
             case ValueType.FN:
                 return `<function ${this.value.name} />`;
             case ValueType.JSFN:
@@ -233,6 +244,15 @@ const CONSTRUCTOR_ARRAY = ({
     })),
 });
 
+const CONSTRUCTOR_OBJECT = ({
+    ...BASE_PROPERTIES,
+    "name": ValueType.OBJECT,
+    "private.static.new": function(state, value) {
+        state.stack.push(new Value(CONSTRUCTOR_OBJECT, value));
+    },
+    /****************/
+})
+
 const valueToJsObj = (value) => {
     switch (value?.dtype?.name ?? null) {
         case ValueType.NUMBER:
@@ -341,6 +361,56 @@ const neg = (state) => {
         // when operands are not compatible
         // at runtime
         CONSTRUCTOR_ERROR["private.static.new"](state, `TypeError: bad operand type for unary -: '${a.dtype.name}'`);
+    }
+}
+
+const preInc = (state) => {
+    const a = state.stack.pop();
+    if (a.dtype.name == ValueType.NUMBER) {
+        CONSTRUCTOR_NUMBER["private.static.new"](state, a.value + 1);
+    } else {
+        // Allow fault tolerance
+        // when operands are not compatible
+        // at runtime
+        CONSTRUCTOR_ERROR["private.static.new"](state, `TypeError: unsupported operand type(s) for ++: '${a.dtype.name}'`);
+    }
+}
+
+const preDec = (state) => {
+    const a = state.stack.pop();
+    if (a.dtype.name == ValueType.NUMBER) {
+        CONSTRUCTOR_NUMBER["private.static.new"](state, a.value - 1);
+    } else {
+        // Allow fault tolerance
+        // when operands are not compatible
+        // at runtime
+        CONSTRUCTOR_ERROR["private.static.new"](state, `TypeError: unsupported operand type(s) for --: '${a.dtype.name}'`);
+    }
+}
+
+const postInc = (state) => {
+    const a = state.stack.pop();
+    if (a.dtype.name == ValueType.NUMBER) {
+        CONSTRUCTOR_NUMBER["private.static.new"](state, a.value + 1);
+        state.stack.push(a);
+    } else {
+        // Allow fault tolerance
+        // when operands are not compatible
+        // at runtime
+        CONSTRUCTOR_ERROR["private.static.new"](state, `TypeError: unsupported operand type(s) for ++: '${a.dtype.name}'`);
+    }
+}
+
+const postDec = (state) => {
+    const a = state.stack.pop();
+    if (a.dtype.name == ValueType.NUMBER) {
+        CONSTRUCTOR_NUMBER["private.static.new"](state, a.value - 1);
+        state.stack.push(a);
+    } else {
+        // Allow fault tolerance
+        // when operands are not compatible
+        // at runtime
+        CONSTRUCTOR_ERROR["private.static.new"](state, `TypeError: unsupported operand type(s) for --: '${a.dtype.name}'`);
     }
 }
 
@@ -600,9 +670,15 @@ function execute(state, valueOfTypeScriptOrFn) {
                     str += String.fromCharCode(code[index]);
                     index++;
                 }
-                CONSTRUCTOR_STRING["private.static.new"](state, str);
+                CONSTRUCTOR_STRING["private.static.new"](state, Buffer.from(str, 'base64').toString('utf-8'));
                 // (str + 1nullchr) + next
                 pc += str.length + 1 + 1;
+                break;
+            }
+            case OPCODE.LOAD_BOOL: {
+                CONSTRUCTOR_BOOL["private.static.new"](state, code[pc + 1] == 1);
+                // (1byte bool) + next
+                pc += 1 + 1;
                 break;
             }
             case OPCODE.LOAD_NULL: {
@@ -620,6 +696,22 @@ function execute(state, valueOfTypeScriptOrFn) {
                 }
                 
                 CONSTRUCTOR_ARRAY["private.static.new"](state, arr);
+
+                // 4 bytes for size + next
+                pc += 4 + 1;
+                break;
+            }
+            case OPCODE.MAKE_OBJECT: {
+                const size = get4Number(pc + 1, code);
+
+                const obj = {};
+                for (let i = 0; i < size; i++) {
+                    const k = state.stack.pop();
+                    const v = state.stack.pop();
+                    obj[k.toString()] = v;
+                }
+                
+                CONSTRUCTOR_OBJECT["private.static.new"](state, obj);
 
                 // 4 bytes for size + next
                 pc += 4 + 1;
@@ -661,10 +753,13 @@ function execute(state, valueOfTypeScriptOrFn) {
 
                 if (obj.dtype.name == ValueType.TYPE) {
                     // Get static attribute
-                    attr  = obj.value[`static.${name}`];
+                    attr = obj.value[`static.${name}`];
+                } else if (obj.dtype.name == ValueType.OBJECT) {
+                    // Get dynamic attribute
+                    attr = obj.value[name];
                 } else {
                     // Get static attribute
-                    attr  = obj.dtype[name];
+                    attr = obj.dtype[name];
                 }
 
                 if (attr) {
@@ -765,6 +860,30 @@ function execute(state, valueOfTypeScriptOrFn) {
                 pc += 4 + 1;
                 break;
             }
+            case OPCODE.GET_INDEX: {
+                const index = state.stack.pop();
+                const obj = state.stack.pop();
+
+                if (obj.dtype.name == ValueType.ARRAY && index.dtype.name == ValueType.NUMBER) {
+                    if (index.value < 0 || index.value >= obj.value.length) {
+                        // Allow fault tolerance
+                        // when index is out of range
+                        // at runtime
+                        CONSTRUCTOR_ERROR["private.static.new"](state, `IndexError: list index out of range`);
+                    } else {
+                        state.stack.push(obj.value[index.value]);
+                    }
+                } else {
+                    // Allow fault tolerance
+                    // when object is not indexable
+                    // at runtime
+                    CONSTRUCTOR_ERROR["private.static.new"](state, `TypeError: ${obj.dtype.name} object is not indexable`);
+                }
+
+                // next
+                pc += 1;
+                break;
+            }
             case OPCODE.STORE_FAST: {
                 let index = pc + 1;
                 let name = ""
@@ -801,10 +920,7 @@ function execute(state, valueOfTypeScriptOrFn) {
                 pc += name.length + 1 + 1;
                 break;
             }
-            case OPCODE.SET_ATTRIBUTE: {
-                const obj = state.stack.pop();
-                const val = state.stack.pop();
-                
+            case OPCODE.SET_ATTRIBUTE: {        
                 let index = pc + 1;
                 let name = ""
                 while (code[index] != 0) {
@@ -812,22 +928,68 @@ function execute(state, valueOfTypeScriptOrFn) {
                     index++;
                 }
 
+                const val = state.stack.pop();
+                const oth = state.stack.pop();
+                const obj = state.stack.pop();
+
+                state.stack.push(oth); // push back other obj
+
                 switch (obj.dtype.name) {
                     case ValueType.TYPE: {
-                        obj.value[name] = val;
-                        break
+                        obj.value[`static.${name}`] = val;
+                        break;
                     }
                     default: {
                         // Allow fault tolerance
                         // when object is not type
                         // at runtime
+                        state.stack.pop(); // pop val
                         CONSTRUCTOR_ERROR["private.static.new"](state, `TypeError: ${obj.dtype.name} object does not support item assignment`);
                         break;
                     }
                 }
 
                 // (name + 1nullchr) + next
-                pc += name.length + 1 + 1;
+                pc += (name.length + 1) + 1;
+                break;
+            }
+            case OPCODE.SET_INDEX: {
+                const val   = state.stack.pop();
+                const oth   = state.stack.pop();
+                const index = state.stack.pop();
+                const obj   = state.stack.pop();
+
+                state.stack.push(oth); // push back other obj
+
+                if (obj.dtype.name == ValueType.ARRAY && index.dtype.name == ValueType.NUMBER) {
+                    if (index.value < 0 || index.value >= obj.value.length) {
+                        // Allow fault tolerance
+                        // when index is out of range
+                        // at runtime
+                        state.stack.pop(); // pop val
+                        CONSTRUCTOR_ERROR["private.static.new"](state, `IndexError: list assignment index out of range`);
+                    } else {
+                        obj.value[index.value] = val;
+                    }
+                } else {
+                    // Allow fault tolerance
+                    // when object is not indexable
+                    // at runtime
+                    state.stack.pop(); // pop val
+                    CONSTRUCTOR_ERROR["private.static.new"](state, `TypeError: ${obj.dtype.name} object is not indexable`);
+                }
+
+                pc += 1;
+                break;
+            }
+            case OPCODE.POSTFIX_INC: {
+                postInc(state);
+                pc += 1;
+                break;
+            }
+            case OPCODE.POSTFIX_DEC: {
+                postDec(state);
+                pc += 1;
                 break;
             }
             case OPCODE.LOG_NOT: {
@@ -847,6 +1009,16 @@ function execute(state, valueOfTypeScriptOrFn) {
             }
             case OPCODE.NEG: {
                 neg(state);
+                pc += 1;
+                break;
+            }
+            case OPCODE.PREFIX_INC: {
+                preInc(state);
+                pc += 1;
+                break;
+            }
+            case OPCODE.PREFIX_DEC: {
+                preDec(state);
                 pc += 1;
                 break;
             }
@@ -972,6 +1144,14 @@ function execute(state, valueOfTypeScriptOrFn) {
                 pc += 1;
                 break;
             }
+            case OPCODE.DUP_2: {
+                const top = state.stack[state.stack.length - 2];
+                const nxt = state.stack[state.stack.length - 1];
+                state.stack.push(top);
+                state.stack.push(nxt);
+                pc += 1;
+                break;
+            }
             case OPCODE.JUMP: {
                 pc += get4Number(pc + 1, code);
                 break;
@@ -986,6 +1166,43 @@ function execute(state, valueOfTypeScriptOrFn) {
                 }
                 break;
             }
+            case OPCODE.JUMP_IF_FALSE_OR_POP: {
+                const value = state.stack[state.stack.length - 1];
+                if (!value.value) {
+                    pc += get4Number(pc + 1, code);
+                } else {
+                    state.stack.pop();
+                    // 4 byte offset + next
+                    pc += 4 + 1;
+                }
+                break;
+            }
+            case OPCODE.JUMP_IF_TRUE_OR_POP: {
+                const value = state.stack[state.stack.length - 1];
+                if (value.value) {
+                    pc += get4Number(pc + 1, code);
+                } else {
+                    state.stack.pop();
+                    // 4 byte offset + next
+                    pc += 4 + 1;
+                }
+                break;
+            }
+            case OPCODE.ROT_2: {
+                rot2(state);
+                pc += 1;
+                break;
+            }
+            case OPCODE.ROT_3: {
+                rot3(state);
+                pc += 1;
+                break;
+            }
+            case OPCODE.ROT_4: {
+                rot4(state);
+                pc += 1;
+                break;
+            }
             case OPCODE.RETURN: {
                 return;
             }
@@ -996,6 +1213,39 @@ function execute(state, valueOfTypeScriptOrFn) {
             }
         }
     }
+}
+
+const rot2 = (state) => {
+    // A, B -> B, A
+    const A_INDEX = state.stack.length - 1;
+    const B_INDEX = state.stack.length - 2;
+    const tmp = state.stack[A_INDEX];
+    state.stack[A_INDEX] = state.stack[B_INDEX];
+    state.stack[B_INDEX] = tmp;
+}
+
+const rot3 = (state) => {
+    // A, B, C -> B, C, A
+    const A_INDEX = state.stack.length - 1;
+    const B_INDEX = state.stack.length - 2;
+    const C_INDEX = state.stack.length - 3;
+    const tmp = state.stack[A_INDEX];
+    state.stack[A_INDEX] = state.stack[B_INDEX];
+    state.stack[B_INDEX] = state.stack[C_INDEX];
+    state.stack[C_INDEX] = tmp;
+}
+
+const rot4 = (state) => {
+    // A, B, C, D -> B, C, D, A
+    const A_INDEX = state.stack.length - 1;
+    const B_INDEX = state.stack.length - 2;
+    const C_INDEX = state.stack.length - 3;
+    const D_INDEX = state.stack.length - 4;
+    const tmp = state.stack[A_INDEX];
+    state.stack[A_INDEX] = state.stack[B_INDEX];
+    state.stack[B_INDEX] = state.stack[C_INDEX];
+    state.stack[C_INDEX] = state.stack[D_INDEX];
+    state.stack[D_INDEX] = tmp;
 }
 
 function load(state) {
@@ -1029,7 +1279,6 @@ function load(state) {
 }
 
 const ENVXGLOBAL = ({});
-const EXECUTABLE = ({});
 
 const STATE = ({
     stack: [],

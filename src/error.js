@@ -11,11 +11,20 @@ function throwError(envFile, fileContent, message, position) {
     let str = "";
     for (let i = lstart;i < lended; i++) {
         const line = lines[i];
-        str += `${i + 1} | ${line}`;
-        if (i + 1 === position.sline) {
-            str += "\n";
-            str += " ".repeat(position.scolm) + "^".repeat(position.ecolm - position.scolm);
+
+        const diff = lended.toString().length - (i + 1).toString().length;
+
+        str += `${" ".repeat(diff)}${i + 1} | `;
+
+
+        if (i + 1 >= position.sline && i + 1 <= position.eline) {
+            str += " > ";
+        } else {
+            str += "   ";
         }
+
+        str += line;
+
         if (i < lended - 1) {
             str += "\n";
         }

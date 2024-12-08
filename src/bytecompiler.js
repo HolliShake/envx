@@ -59,14 +59,32 @@ class Visitor {
             case Ast.STRING:
                 this.astString(node);
                 break;
+            case Ast.BOOL:
+                this.astBool(node);
+                break;
+            case Ast.NULL:
+                this.astNull(node);
+                break;
             case Ast.ARRAY:
                 this.astMakeArray(node);
+                break;
+            case Ast.OBJECT:
+                this.astMakeObject(node);
                 break;
             case Ast.ACCESS:
                 this.astAccess(node);
                 break;
             case Ast.CALL:
                 this.astCalll(node);
+                break;
+            case Ast.INDEX:
+                this.astIndex(node);
+                break;
+            case Ast.PLUS2_POSTFIX:
+                this.astPlus2Postfix(node);
+                break;
+            case Ast.MINUS2_POSTFIX:
+                this.astMinus2Postfix(node);
                 break;
             case Ast.LNOT:
                 this.astLogNot(node);
@@ -79,6 +97,12 @@ class Visitor {
                 break;
             case Ast.NEG:
                 this.astNeg(node);
+                break;
+            case Ast.PLUS2_PREFIX:
+                this.astPlus2Prefix(node);
+                break;
+            case Ast.MINUS2_PREFIX:
+                this.astMinus2Prefix(node);
                 break;
             case Ast.BIN_MUL:
                 this.astBinMul(node);
@@ -119,8 +143,14 @@ class Visitor {
             case Ast.BIN_NEQ:
                 this.astBinNe(node);
                 break;
+            case Ast.BIN_LAND:
+                this.astLAnd(node);
+                break;
+            case Ast.BIN_LOR:
+                this.astLor(node);
+                break;
             case Ast.BIN_ASSIGN:
-                this.astAssign(node);
+                this.astSimpleAssign(node);
                 break;
             case Ast.BIN_MUL_ASS:
                 this.astMulAssign(node);
@@ -151,6 +181,9 @@ class Visitor {
                 break;
             case Ast.BIN_XOR_ASS:
                 this.astXorAssign(node);
+                break;
+            case Ast.TERNARY:
+                this.astTernary(node);
                 break;
             case Ast.EXPR_STMNT:
                 this.astExprStmt(node);
@@ -267,7 +300,11 @@ class ByteComiler extends Visitor {
             ((symbol && symbol.isGloal) || !symbol)
                 ? node.value // use actual name if global
                 : symbol.tmpName;
-        this.bytecode.push(...[OPCODE.LOAD_NAME, ...sliceWord(toWrite)]);
+
+        this.bytecode.push(...[
+            OPCODE.LOAD_NAME, 
+            ...sliceWord(toWrite)
+        ]);
     }
 
     astNumber(node) {
@@ -280,8 +317,19 @@ class ByteComiler extends Visitor {
     astString(node) {
         this.bytecode.push(...[
             OPCODE.LOAD_STRING,
-            ...sliceWord(node.value)
+            ...sliceWord(Buffer.from(node.value).toString('base64'))
         ]);
+    }
+
+    astBool(node) {
+        this.bytecode.push(...[
+            OPCODE.LOAD_BOOL,
+            (node.value === "true") ? 1 : 0
+        ]);
+    }
+
+    astNull(node) {
+        this.bytecode.push(OPCODE.LOAD_NULL);
     }
 
     astMakeArray(node) {
@@ -292,6 +340,19 @@ class ByteComiler extends Visitor {
         this.bytecode.push(...[
             OPCODE.MAKE_ARRAY,
             ...slice4Number(elements.length)
+        ]);
+    }
+
+    astMakeObject(node) {
+        const properties = node.properties.reverse();
+        for (let i = 0; i < properties.length; i++) {
+            const pair = properties[i];
+            this.visit(pair.val);
+            this.visit(pair.key);
+        }
+        this.bytecode.push(...[
+            OPCODE.MAKE_OBJECT,
+            ...slice4Number(properties.length)
         ]);
     }
 
@@ -332,11 +393,24 @@ class ByteComiler extends Visitor {
             this.visit(node.object);
         }
 
-
         this.bytecode.push(...[
             isMethodCall ? OPCODE.CALL_METHOD : OPCODE.CALL_FUNCTION,
             ...slice4Number(args.length)
         ]);
+    }
+
+    astIndex(node) {
+        this.visit(node.object);
+        this.visit(node.index );
+        this.bytecode.push(OPCODE.GET_INDEX);
+    }
+
+    astPlus2Postfix(node) {
+        this.astUtilPostfixMutate(node, OPCODE.POSTFIX_INC);
+    }
+
+    astMinus2Postfix(node) {
+        this.astUtilPostfixMutate(node, OPCODE.POSTFIX_DEC);
     }
 
     astLogNot(node) {
@@ -357,6 +431,14 @@ class ByteComiler extends Visitor {
     astNeg(node) {
         this.visit(node.right);
         this.bytecode.push(OPCODE.NEG);
+    }
+
+    astPlus2Prefix(node) {
+       this.astUtilPrefixMutate(node, OPCODE.PREFIX_INC);
+    }
+
+    astMinus2Prefix(node) {
+        this.astUtilPrefixMutate(node, OPCODE.PREFIX_DEC);
     }
 
     astBinMul(node) {
@@ -437,15 +519,80 @@ class ByteComiler extends Visitor {
         this.bytecode.push(OPCODE.BIN_NE);
     }
 
-    astAssign0(node) {
-        this.visit(node);
+    astLAnd(node) {
+        this.visit(node.left );
+        const begin = this.bytecode.length;
+        this.bytecode.push(...[
+            OPCODE.JUMP_IF_FALSE_OR_POP,
+            ...preserve(4)
+        ]);
+        const startIndex = (this.bytecode.length - 1) - 3;
+        this.visit(node.right);
+        const end = this.bytecode.length - begin;
+        setBytes(this.bytecode, startIndex, 4, end);
     }
 
-    astAssign1(node) {
-        this.bytecode.push(OPCODE.DUP_TOP);
+    astLor(node) {
+        this.visit(node.left);
+        const begin = this.bytecode.length;
+        this.bytecode.push(...[
+            OPCODE.JUMP_IF_TRUE_OR_POP,
+            ...preserve(4)
+        ]);
+        const startIndex = (this.bytecode.length - 1) - 3;
+        this.visit(node.right);
+        const end = this.bytecode.length - begin;
+        setBytes(this.bytecode, startIndex, 4, end);
+    }
+
+    astUtilLoadLefthand(node) {
         switch (node.type) {
             case Ast.ID: {
                 const symbol = getSymbol(this.scope, node.value);
+
+                const toWrite =
+                    ((symbol && symbol.isGloal) || !symbol)
+                        ? node.value // use actual name if global
+                        : symbol.tmpName;
+
+                this.bytecode.push(...[
+                    OPCODE.LOAD_NAME, 
+                    ...sliceWord(toWrite)
+                ]);
+                break;
+            }
+            case Ast.INDEX: {
+                this.visit(node.object);
+                this.visit(node.index );
+                this.bytecode.push(OPCODE.DUP_2);
+                this.bytecode.push(OPCODE.GET_INDEX);
+                break;
+            }
+            case Ast.ACCESS: {
+                this.visit(node.object);
+                this.bytecode.push(OPCODE.DUP_TOP);
+
+                if (node.member.type != Ast.ID)
+                    throwError(this.parser.tokenizer.envName, this.parser.tokenizer.data, `Expected identifier but got ${node.member.type}`, node.member.position);
+
+                this.bytecode.push(...[
+                    OPCODE.GET_ATTRIBUTE, 
+                    ...sliceWord(node.member.value)
+                ]);
+                break;
+            }
+            default:
+                throwError(this.parser.tokenizer.envName, this.parser.tokenizer.data, `left-hand is not assignable`, node.position);
+        }
+    }
+
+    astUtilAssignLeftHand(node, isPostfix) {
+        switch (node.type) {
+            case Ast.ID: {
+                if (isPostfix) this.bytecode.push(OPCODE.ROT_2);
+
+                const symbol = getSymbol(this.scope, node.value);
+
                 if (!symbol) {
                     this.bytecode.push(...[
                         OPCODE.STORE_NAME, 
@@ -454,26 +601,32 @@ class ByteComiler extends Visitor {
                     break;
                 }
 
-                if (symbol.isConst) {
-                    throwError(this.parser.tokenizer.envName, this.parser.tokenizer.data, `Cannot assign to constant ${node.value}`, node.position);
-                }
+                if (symbol.isConst)
+                    throwError(this.parser.tokenizer.envName, this.parser.tokenizer.data, `Cannot assign to const ${node.value}`, node.position);
 
                 const toWrite =
                     ((symbol && symbol.isGloal) || !symbol)
                         ? node.value // use actual name if global
                         : symbol.tmpName;
-                
+
                 this.bytecode.push(...[
                     (symbol.isGloal) ? OPCODE.STORE_GLOBAL : OPCODE.STORE_NAME,
                     ...sliceWord(toWrite)
                 ]);
                 break;
             }
+            case Ast.INDEX: {
+                if (isPostfix) this.bytecode.push(OPCODE.ROT_2);
+
+                this.bytecode.push(OPCODE.SET_INDEX);
+                break;
+            }
             case Ast.ACCESS: {
-                this.visit(node.object);
-                if (node.member.type != Ast.ID) {
+                if (isPostfix) this.bytecode.push(OPCODE.ROT_2);
+
+                if (node.member.type != Ast.ID)
                     throwError(this.parser.tokenizer.envName, this.parser.tokenizer.data, `Expected identifier but got ${node.member.type}`, node.member.position);
-                }
+
                 this.bytecode.push(...[
                     OPCODE.SET_ATTRIBUTE,
                     ...sliceWord(node.member.value)
@@ -481,83 +634,160 @@ class ByteComiler extends Visitor {
                 break;
             }
             default:
-                throwError(this.parser.tokenizer.envName, this.parser.tokenizer.data, `Expected identifier but got ${node.type}`, node.position);
+                throwError(this.parser.tokenizer.envName, this.parser.tokenizer.data, `left-hand is not assignable`, node.position);
         }
     }
 
-    astAssign(node) {
-        this.astAssign0(node.right);
-        this.astAssign1(node.left);
+    astUtilAugmentedAssign(node, opcode) {
+        this.astUtilLoadLefthand(node.left);
+        this.visit(node.right);
+        this.bytecode.push(opcode);
+        this.bytecode.push(OPCODE.DUP_TOP);
+        this.astUtilAssignLeftHand(node.left, false);
+    }
+
+    astUtilPostfixMutate(node, opcode) {
+        this.astUtilLoadLefthand(node.left);
+        this.bytecode.push(opcode);
+        this.astUtilAssignLeftHand(node.left, true);
+    }
+
+    astUtilPrefixMutate(node, opcode) {
+        this.astUtilLoadLefthand(node.right);
+        this.bytecode.push(opcode);
+        this.bytecode.push(OPCODE.DUP_TOP);
+        this.astUtilAssignLeftHand(node.right, false);
+    }
+
+    astSimpleAssign(node) {
+        switch (node.left.type) {
+            case Ast.ID: {
+                this.visit(node.right);
+                this.bytecode.push(OPCODE.DUP_TOP);
+
+                const symbol = getSymbol(this.scope, node.left.value);
+
+                if (!symbol) {
+                    this.bytecode.push(...[
+                        OPCODE.STORE_NAME, 
+                        ...sliceWord(node.left.value)
+                    ]);
+                    break;
+                }
+
+                if (symbol.isConst)
+                    throwError(this.parser.tokenizer.envName, this.parser.tokenizer.data, `Cannot assign to const ${node.left.value}`, node.position);
+
+                const toWrite =
+                    ((symbol && symbol.isGloal) || !symbol)
+                        ? node.left.value // use actual name if global
+                        : symbol.tmpName;
+
+                this.bytecode.push(...[
+                    (symbol.isGloal) ? OPCODE.STORE_GLOBAL : OPCODE.STORE_NAME, 
+                    ...sliceWord(toWrite)
+                ]);
+                break;
+            }
+            case Ast.INDEX: {
+                this.visit(node.right);
+                this.bytecode.push(OPCODE.DUP_TOP);
+
+                this.visit(node.left.object);
+                this.visit(node.left.index);
+
+                this.bytecode.push(OPCODE.SET_INDEX);
+                break;
+            }
+            case Ast.ACCESS: {
+                // Load object
+                this.visit(node.left.object);
+
+                this.visit(node.right);
+                this.bytecode.push(OPCODE.DUP_TOP);
+
+                if (node.left.member.type != Ast.ID)
+                    throwError(this.parser.tokenizer.envName, this.parser.tokenizer.data, `Expected identifier but got ${node.left.member.type}`, node.left.member.position);
+
+                this.bytecode.push(...[
+                    OPCODE.SET_ATTRIBUTE, 
+                    ...sliceWord(node.left.member.value)
+                ]);
+                break;
+            }
+            default:
+                throwError(this.parser.tokenizer.envName, this.parser.tokenizer.data, `left-hand is not assignable`, node.position);
+        }
     }
 
     astMulAssign(node) {
-        this.astAssign0(node.left);
-        this.astAssign0(node.right);
-        this.bytecode.push(OPCODE.BIN_MUL);
-        this.astAssign1(node.left);
+        this.astUtilAugmentedAssign(node, OPCODE.BIN_MUL);
     }
 
     astDivAssign(node) {
-        this.astAssign0(node.left);
-        this.astAssign0(node.right);
-        this.bytecode.push(OPCODE.BIN_DIV);
-        this.astAssign1(node.left);
+        this.astUtilAugmentedAssign(node, OPCODE.BIN_DIV);
     }
 
     astModAssign(node) {
-        this.astAssign0(node.left);
-        this.astAssign0(node.right);
-        this.bytecode.push(OPCODE.BIN_MOD);
-        this.astAssign1(node.left);
+        this.astUtilAugmentedAssign(node, OPCODE.BIN_MOD);
     }
 
     astAddAssign(node) {
-        this.astAssign0(node.left);
-        this.astAssign0(node.right);
-        this.bytecode.push(OPCODE.BIN_ADD);
-        this.astAssign1(node.left);
+        this.astUtilAugmentedAssign(node, OPCODE.BIN_ADD);
     }
 
     astSubAssign(node) {
-        this.astAssign0(node.left);
-        this.astAssign0(node.right);
-        this.bytecode.push(OPCODE.BIN_SUB);
-        this.astAssign1(node.left);
+        this.astUtilAugmentedAssign(node, OPCODE.BIN_SUB);
     }
 
     astShlAssign(node) {
-        this.astAssign0(node.left);
-        this.astAssign0(node.right);
-        this.bytecode.push(OPCODE.BIN_SHL);
-        this.astAssign1(node.left);
+        this.astUtilAugmentedAssign(node, OPCODE.BIN_SHL);
     }
 
     astShrAssign(node) {
-        this.astAssign0(node.left);
-        this.astAssign0(node.right);
-        this.bytecode.push(OPCODE.BIN_SHR);
-        this.astAssign1(node.left);
+        this.astUtilAugmentedAssign(node, OPCODE.BIN_SHR);
     }
 
     astAndAssign(node) {
-        this.astAssign0(node.left);
-        this.astAssign0(node.right);
-        this.bytecode.push(OPCODE.BIN_AND);
-        this.astAssign1(node.left);
+        this.astUtilAugmentedAssign(node, OPCODE.BIN_AND);
     }
 
     astOrAssign(node) {
-        this.astAssign0(node.left);
-        this.astAssign0(node.right);
-        this.bytecode.push(OPCODE.BIN_OR);
-        this.astAssign1(node.left);
+        this.astUtilAugmentedAssign(node, OPCODE.BIN_OR);
     }
 
     astXorAssign(node) {
-        this.astAssign0(node.left);
-        this.astAssign0(node.right);
-        this.bytecode.push(OPCODE.BIN_XOR);
-        this.astAssign1(node.left);
+        this.astUtilAugmentedAssign(node, OPCODE.BIN_XOR);
+    }
+
+    astTernary(node) {
+        this.visit(node.condition);
+        const elseOrNextBegin = this.bytecode.length;
+        this.bytecode.push(...[
+            OPCODE.POP_JUMP_IF_FALSE, 
+            ...preserve(4)
+        ]);
+        /**** to else **/
+        const beginJumpToElseIndex = (this.bytecode.length - 1) - 3;
+        // >> then
+        this.visit(node.trueVal);
+
+        const endIf = this.bytecode.length;
+        this.bytecode.push(...[
+            OPCODE.JUMP, 
+            ...preserve(4)
+        ]);
+        /**** to endif **/
+        const endJumpIndex = (this.bytecode.length - 1) - 3;
+
+        // >> else?
+        const elseCount = this.bytecode.length - elseOrNextBegin;
+        setBytes(this.bytecode, beginJumpToElseIndex, 4, elseCount);
+        this.visit(node.falseVal);
+
+        // endif
+        const endIfCount = this.bytecode.length - endIf;
+        setBytes(this.bytecode, endJumpIndex, 4, endIfCount);
     }
 
     astExprStmt(node) {
