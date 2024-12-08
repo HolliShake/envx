@@ -1,41 +1,35 @@
 
-Number.initial = 2;
-
-var x = 2;
-
-const arr = [1,2,3];
-
-println(arr[1]);
-
-arr[1] += 69420;
-
-arr[1]++;
-
-++arr[1];
-
-println(arr);
-
-const y = (x += 2) + 2 * 2 - (50 / 2) + (++x) + (arr[1]++) + (x -= 3) * ++Number.initial + (Number.initial *= 2);
-
-println(y, x, arr);
-
-var index = 0;
-
-while (index < 3) {
-    println("index :=", index++);
-}
-
-(3 < 2)? println("Yes!!") : println("No");
-
-println(1 && false);
-
-fn getName() {
-    return this.name;
-}
-
 const obj = ({
     "name": "Doy2",
     "getName": getName
 });
 
 println(obj, obj.getName());
+
+fn Person(_name, _age) {
+    return ({
+        "name" : _name,
+        "age"  : _age,
+        "greet": fn() {
+            println("Hello, from", this.name);
+        }
+    });
+}
+
+
+const doy = Person("Philipp Andrew Roa Redondo", 26);
+
+println(doy, doy["name"]);
+
+
+doy.greet();
+
+
+(fn() {
+    println(">>", doy["instance"] = doy);
+    println("Hello World!", doy);
+})();
+
+while (true) {
+   break;
+}

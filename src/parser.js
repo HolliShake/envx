@@ -10,6 +10,7 @@ const Ast = Object.freeze({
     NULL    : "NULL",
     ARRAY   : "ARRAY",
     OBJECT  : "OBJECT",
+    FN_EXPR : "FN_EXPR",
     ACCESS  : "ACCESS",
     CALL    : "CALL",
     INDEX   : "INDEX",
@@ -210,6 +211,8 @@ class Parser {
                 properties: properties,
                 position: mergePos(start, ended)
             });
+        } else if (this.check("fn")) {
+            return this.fn(true);
         }
         return this.terminal();
     }
@@ -789,7 +792,7 @@ class Parser {
             return this.ifStmnt();
         }
         else if (this.check("fn")) {
-            return this.fn();
+            return this.fn(false);
         }
         else if (this.check("do")) {
             return this.doWhile();
@@ -1031,10 +1034,12 @@ class Parser {
         });
     }
 
-    fn() {
+    fn(isHeadless) {
         let start = this.look.position, ended = {};
         this.consume("fn");
-        const name = this.terminal();
+        const name = (isHeadless) 
+        ? ({ type: Ast.ID, value: "headless", position: start }) 
+        : this.terminal();
         if (!name)
             throwError(this.tokenizer.envName, this.tokenizer.data, `Expected terminal but found ${this.look.value}`, this.look.position);
         this.consume("(");
@@ -1062,7 +1067,7 @@ class Parser {
         this.consume("}");
         ended = this.prev.position;
         return ({
-            type: Ast.FN,
+            type: isHeadless? Ast.FN_EXPR : Ast.FN,
             name: name,
             parameters: parameters,
             body: body,

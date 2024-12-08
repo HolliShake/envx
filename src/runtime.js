@@ -10,7 +10,8 @@ const ValueType  = Object.freeze({
     BOOL   : "bool",
     NULL   : "null",
     ERROR  : "error",
-    ARRAY  : "array"
+    ARRAY  : "array",
+    OBJECT : "object"
 });
 
 class Value {
@@ -864,6 +865,8 @@ function execute(state, valueOfTypeScriptOrFn) {
                 const index = state.stack.pop();
                 const obj = state.stack.pop();
 
+
+
                 if (obj.dtype.name == ValueType.ARRAY && index.dtype.name == ValueType.NUMBER) {
                     if (index.value < 0 || index.value >= obj.value.length) {
                         // Allow fault tolerance
@@ -873,6 +876,9 @@ function execute(state, valueOfTypeScriptOrFn) {
                     } else {
                         state.stack.push(obj.value[index.value]);
                     }
+                } else if (obj.dtype.name == ValueType.OBJECT && index.dtype.name == ValueType.STRING) {
+                    const v = obj.value[index.value];
+                    v ? state.stack.push(v) : CONSTRUCTOR_NULL["private.static.new"](state);
                 } else {
                     // Allow fault tolerance
                     // when object is not indexable
@@ -939,6 +945,10 @@ function execute(state, valueOfTypeScriptOrFn) {
                         obj.value[`static.${name}`] = val;
                         break;
                     }
+                    case ValueType.OBJECT: {
+                        obj.value[name] = val;
+                        break;
+                    }
                     default: {
                         // Allow fault tolerance
                         // when object is not type
@@ -971,6 +981,8 @@ function execute(state, valueOfTypeScriptOrFn) {
                     } else {
                         obj.value[index.value] = val;
                     }
+                } else if (obj.dtype.name == ValueType.OBJECT && index.dtype.name == ValueType.STRING) {
+                    obj.value[index.value] = val;
                 } else {
                     // Allow fault tolerance
                     // when object is not indexable
@@ -1276,6 +1288,12 @@ function load(state) {
     
     state.scope["Error"]
         = new Value(CONSTRUCTOR_TYPE, CONSTRUCTOR_ERROR);
+    
+    state.scope["Array"]
+        = new Value(CONSTRUCTOR_TYPE, CONSTRUCTOR_ARRAY);
+    
+    state.scope["Object"]
+        = new Value(CONSTRUCTOR_TYPE, CONSTRUCTOR_OBJECT);
 }
 
 const ENVXGLOBAL = ({});

@@ -71,6 +71,9 @@ class Visitor {
             case Ast.OBJECT:
                 this.astMakeObject(node);
                 break;
+            case Ast.FN_EXPR:
+                this.astfn(node, true);
+                break;
             case Ast.ACCESS:
                 this.astAccess(node);
                 break;
@@ -201,7 +204,7 @@ class Visitor {
                 this.astIf(node);
                 break;
             case Ast.FN:
-                this.astfn(node);
+                this.astfn(node, false);
                 break;
             case Ast.DO_WHILE:
                 this.astDoWhile(node);
@@ -248,6 +251,30 @@ const randomName = () => {
 const scopeInside = (scope, scopeId) => {
     let current = scope;
     while (current) {
+
+        /**** Special cases **/
+        switch (scopeId) {
+            // if the user is looking for these scopes
+            // return as invalid directly
+            case SCOPE.LOOP: {
+                // the user used break, or continue stmnt. these stmnts
+                // is only valid inside loop.
+                /* example:
+                    while (true) {
+                        (fn() {
+                            continue; // should not work!!!
+                        });
+                    }
+                */
+                if (current["$type"] == SCOPE.FN) {
+                    return false;
+                }
+                break;
+            }
+            default:
+                break;
+        }
+
         if (current["$type"] == scopeId) {
             return true;
         }
@@ -690,11 +717,11 @@ class ByteComiler extends Visitor {
                 break;
             }
             case Ast.INDEX: {
-                this.visit(node.right);
-                this.bytecode.push(OPCODE.DUP_TOP);
-
                 this.visit(node.left.object);
                 this.visit(node.left.index);
+
+                this.visit(node.right);
+                this.bytecode.push(OPCODE.DUP_TOP);
 
                 this.bytecode.push(OPCODE.SET_INDEX);
                 break;
@@ -945,8 +972,8 @@ class ByteComiler extends Visitor {
         setBytes(this.bytecode, endJumpIndex, 4, endIfCount);
     }
 
-    astfn(node) {
-        if (this.scope.$type != SCOPE.GLOBAL) {
+    astfn(node, isHeadless) {
+        if ((!isHeadless) && this.scope.$type != SCOPE.GLOBAL) {
             throwError(this.parser.tokenizer.envName, this.parser.tokenizer.data, `Function declaration outside of global scope`, node.position);
         }
 
@@ -1009,6 +1036,8 @@ class ByteComiler extends Visitor {
         setBytes(this.bytecode, beginBodyCountIndex, 4, bodyCount);
 
         this.scope = old;
+
+        if (isHeadless) return;
 
         symbolExitsGlobally(this.scope, name.value)
             && throwError(this.parser.tokenizer.envName, this.parser.tokenizer.data, `Function ${name.value} already exits`, node.position);
