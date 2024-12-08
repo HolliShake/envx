@@ -671,7 +671,13 @@ function execute(state, valueOfTypeScriptOrFn) {
                     str += String.fromCharCode(code[index]);
                     index++;
                 }
-                CONSTRUCTOR_STRING["private.static.new"](state, Buffer.from(str, 'base64').toString('utf-8'));
+                let decoder = null;
+                try {
+                    decoder = Buffer?.from;
+                } catch (err) {
+                    decoder = window?.atob ?? ((str, fmt) => str);
+                }
+                CONSTRUCTOR_STRING["private.static.new"](state, decoder(str, 'base64').toString('utf-8'));
                 // (str + 1nullchr) + next
                 pc += str.length + 1 + 1;
                 break;

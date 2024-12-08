@@ -342,9 +342,15 @@ class ByteComiler extends Visitor {
     }
 
     astString(node) {
+        let encoder = null;
+        try {
+            encoder = Buffer?.from;
+        } catch (err) {
+            encoder = window?.btoa ?? ((str) => str);
+        }
         this.bytecode.push(...[
             OPCODE.LOAD_STRING,
-            ...sliceWord(Buffer.from(node.value).toString('base64'))
+            ...sliceWord(encoder(node.value).toString('base64'))
         ]);
     }
 
