@@ -76,6 +76,28 @@ class Tokenizer {
         return this.look == '"';
     }
 
+    skipComment() {
+        if (this.look == '/') {
+            this.forward();
+            if (this.look == '/') {
+                while (!this.isEof() && this.look != '\n') {
+                    this.forward();
+                }
+            } else if (this.look == '*') {
+                this.forward();
+                while (!this.isEof() && !(this.look == '*' && this.data.charAt(this.indx + 1) == '/')) {
+                    this.forward();
+                }
+                if (this.look == '*') {
+                    this.forward();
+                }
+                if (this.look == '/') {
+                    this.forward();
+                }
+            }
+        }
+    }
+
     skipWhite() {
         while (!this.isEof() && this.look == '' || this.look == ' ' || this.look == '\t' || this.look == '\n' || this.look == '\r') {
             this.forward();
@@ -392,11 +414,21 @@ class Tokenizer {
         };
     }
 
+    isComment() {
+        const current = this.look;
+        if (this.indx + 1 > this.size)
+            return false;
+        const next = this.data.charAt(this.indx + 1);
+        return current == '/' && (next == '/' || next == '*');
+    }
+
     getNext() {
         while (true) {
             this.skipWhite();
             if (this.isEof()) break;
-            if (this.isIdentifierStart()) {
+            if (this.isComment()) {
+                this.skipComment();
+            }else if (this.isIdentifierStart()) {
                 return this.nextId();
             } else if (this.isDigit()) {
                 return this.nextNumber();

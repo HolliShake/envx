@@ -1,4 +1,6 @@
 
+// 
+
 const obj = ({
     "name": "Doy2",
     "getName": getName
@@ -7,6 +9,8 @@ const obj = ({
 println(obj, obj.getName());
 
 fn Person(_name, _age) {
+    /* class simulation through object */
+
     return ({
         "name" : _name,
         "age"  : _age,
@@ -32,4 +36,12 @@ doy.greet();
 
 while (true) {
    break;
+}
+
+fn printObj(obj) {
+    println(obj["name"]);
+    println(obj.age);
+    println(++obj.age);
+    println(obj);
+    return obj;
 }

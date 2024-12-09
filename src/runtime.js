@@ -265,7 +265,13 @@ const valueToJsObj = (value) => {
         case ValueType.ERROR:
             return value.value.toString();
         case ValueType.ARRAY:
-            return value.value.map(x => valueToJsObj(x));
+            return value.value.map(x => (x == value) ? "[self]" : valueToJsObj(x));
+        case ValueType.OBJECT:
+            const obj = {};
+            for (const [_key, _value] of Object.entries(value.value)) {
+                obj[_key.toString()] = (value == this) ? "[self]" : valueToJsObj(_value);
+            }
+            return obj;
         case ValueType.SCRIPT:
         case ValueType.FN:
         case ValueType.JSFN:
@@ -283,7 +289,13 @@ const jsObjToValue = (jsObj) => {
     } else if (typeof jsObj === "boolean") {
         return new Value(CONSTRUCTOR_BOOL, jsObj);
     } else if (jsObj && jsObj.constructor.name == "Array") {
-        return new Value(CONSTRUCTOR_ARRAY, jsObj.map(x => jsObjToValue(x)));
+        return new Value(CONSTRUCTOR_ARRAY, jsObj.map(x => (x == jsObj) ? jsObjToValue("[self]") : jsObjToValue(x)));
+    } else if (jsObj && jsObj.constructor.name == "Object") {
+        const obj = {};
+        for (const [_key, _value] of Object.entries(jsObj)) {
+            obj[_key.toString()] = (_value == jsObj) ? jsObjToValue("[self]") : jsObjToValue(_value);
+        }
+        return new Value(CONSTRUCTOR_OBJECT, obj);
     } else {
         return new Value(CONSTRUCTOR_NULL, null);
     }
@@ -628,7 +640,8 @@ function callFn(state, valueOfTypeOfFn, isMethod = false) {
     // Save current scope
     state.env.push(state.scope);
     const current = state.scope = {
-        "$": state.scope //parent
+        "$": state.scope, //parent,
+        "__func__": new Value(CONSTRUCTOR_STRING, valueOfTypeOfFn.value.name) // fn macro like __func__ in c
     };
     if (isMethod) {
         current['this'] = state.stack.pop();
